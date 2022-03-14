@@ -33,10 +33,6 @@ LOW PRIORITY:
 - establish state-of-the-art performance with evolutionary algorithms on Isaac Gym and related tasks (for example: Bipedal-Walker-Hardcore)
 - eventually, examine a decentralized parallel architecture and see if any benefits are provided by decentralization over centralization
 
-## Contributing
-
-- FIXME
-
 ## Useful Papers
 
 - [Isaac Gym paper](https://arxiv.org/pdf/2108.10470.pdf)
