@@ -44,3 +44,4 @@ LOW PRIORITY:
 - [ElegantRL-Podracer paper](https://arxiv.org/pdf/2112.05923.pdf)
 - [Deep Neuroevolution with GAs paper](https://arxiv.org/pdf/1712.06567.pdf)
 - [Evolutionary Models of Financial Markets survey](https://www.pnas.org/doi/pdf/10.1073/pnas.2104800118)
+- [Offline Reinforcement Learning paper](https://arxiv.org/pdf/2005.01643.pdf)
