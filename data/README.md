@@ -2,7 +2,7 @@
 
 Individual financial instruments are separated into training, cross-validation, and testing data files. Training files may contain millions of lines spanning decades-worth of data.
 
-Each file is expected to be a comma-delimited text/csv file.
+Each file is expected to be a comma-delimited csv file.
 
 Each line is ordered by the following fields:
 
