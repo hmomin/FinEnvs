@@ -13,6 +13,4 @@ A model example of this entire workflow can be found [here](https://github.com/A
 
 - We make use of the automatic [Black](https://black.readthedocs.io/en/stable/) Python code formatter for development speed. It should be installed with `pip`.
   - When finished updating your code files, run the command `black file.py` where `file.py` is any file you've changed.
-- Lines should be shorter than 88 columns to prevent horizontal scrolling. Most modern IDEs will tell you what column your cursor is at.
-  - If a long comment would stretch beyond 88 columns, it should be wrapped over to the next line.
-  - If a string would stretch beyond 88 columns, it should be rewritten as the sum of multiple strings in Python.
+- If a long comment would stretch beyond 88 columns, it should be wrapped over to the next line to prevent horizontal scrolling. Most modern IDEs will tell you what column your cursor is at.

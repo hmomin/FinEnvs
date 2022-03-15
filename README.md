@@ -12,6 +12,8 @@ For now, see [this Google Doc](https://docs.google.com/document/d/1ReqLKi2quQ19b
 
 ## Task Board
 
+(maybe, all this would be better placed on a "Discussions" post)
+
 HIGH PRIORITY:
 
 - create massively parallel time series environment architecture (Assignee: Momin)
