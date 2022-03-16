@@ -13,4 +13,8 @@ A model example of this entire workflow can be found [here](https://github.com/A
 
 - We make use of the automatic [Black](https://black.readthedocs.io/en/stable/) Python code formatter for development speed. It should be installed with `pip`.
   - When finished updating your code files, run the command `black file.py` where `file.py` is any file you've changed.
+- Functions should not be longer than ~20 lines (usually).
+  - Following this general rule of thumb results in code that is easier to (1) add to, (2) modify, and (3) understand. It also makes fixing bugs a lot easier.
+  - If a function stretches beyond 20-30 lines, there is almost certainly a piece of logic in there that can be abstracted out into its own function - think about it!
 - If a long comment would stretch beyond 88 columns, it should be wrapped over to the next line to prevent horizontal scrolling. Most modern IDEs will tell you what column your cursor is at.
+- For general clean code practices, see [Uncle Bob's clean coding lessons](https://www.youtube.com/playlist?list=PLmmYSbUCWJ4x1GO839azG_BBw8rkh-zOj). The first two videos are excellent - the videos become less useful as you progress through them.
