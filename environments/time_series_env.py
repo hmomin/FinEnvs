@@ -1,7 +1,9 @@
-import os
+import numpy as np
 import pandas as pd
 import torch
 from glob import glob
+from gym import spaces
+from os.path import join
 from pprint import pprint
 from tqdm import tqdm
 from typing import Tuple
@@ -11,29 +13,33 @@ class TimeSeriesEnv:
     def __init__(
         self,
         instrument_name: str,
-        num_envs: int = 1,
+        num_envs: int = 2,
         max_shares: int = 5,
+        starting_balance: float = 1e4,
         num_intervals: int = 390,
         device_id: int = 0,
+        testing_code: bool = False,
     ):
         self.instrument_name = instrument_name
         self.num_envs = num_envs
         self.max_shares = max_shares
+        self.starting_balance = starting_balance
         self.num_intervals = num_intervals
         self.folder_name = self.get_folder_name(instrument_name)
-        self.training_filename = self.find_file_by_key("train")
+        file_key = "dummy" if testing_code else "train"
+        self.training_filename = self.find_file_by_key(file_key)
         self.set_device(device_id)
         self.process_training_data(self.training_filename)
+        self.set_spaces()
+        self.set_environment_params()
 
     def get_folder_name(self, folder_name: str) -> str:
         if "data" not in folder_name:
-            folder_name = os.path.join("data", folder_name)
+            folder_name = join("data", folder_name)
         return folder_name
 
     def find_file_by_key(self, key_string: str) -> str:
-        training_filenames = glob(
-            os.path.join(self.folder_name, "*" + key_string + "*")
-        )
+        training_filenames = glob(join(self.folder_name, "*" + key_string + "*"))
         if len(training_filenames) == 1:
             return training_filenames[0]
         else:
@@ -54,7 +60,6 @@ class TimeSeriesEnv:
         self.read_data(path)
         self.force_market_hours()
         self.set_up_environments()
-        self.set_spaces()
 
     def read_data(self, path: str):
         print(f"Reading data for {self.instrument_name}...")
@@ -70,9 +75,10 @@ class TimeSeriesEnv:
 
     def set_up_environments(self):
         print(f"Setting up environments for {self.instrument_name}...")
-        self.environments = []
+        self.environments: "list[torch.Tensor]" = []
         unique_dates = self.df["Date"].unique()
         num_dates = len(unique_dates)
+        # use tqdm to track progress in setting up environments
         for _, date in zip(tqdm(range(num_dates)), unique_dates):
             (start_index, stop_index) = self.get_bounding_indices(date)
             if start_index < 0:
@@ -98,10 +104,34 @@ class TimeSeriesEnv:
         return torch.tensor(flattened_np_array, device=self.device)
 
     def set_spaces(self):
+        # observation dimension consists of:
+        # {price data + balance + current number of shares}
+        self.num_price_values = self.num_intervals * self.values_per_interval
+        self.num_obs = self.num_price_values + 2
         # use a continuous action space and discretize based on max_shares
-        self.uses_continuous_action_space = True
-        self.action_dim = 1
-        self.observation_dim = self.num_intervals * self.values_per_interval
+        self.num_acts = 1
+        self.action_space = spaces.Box(
+            np.ones(self.num_acts) * -1.0,
+            np.ones(self.num_acts) * +1.0,
+            dtype=np.float64,
+        )
+        self.observation_space = spaces.Box(
+            np.ones(self.num_obs) * -np.inf,
+            np.ones(self.num_obs) * +np.inf,
+            dtype=np.float64,
+        )
+
+    def set_environment_params(self):
+        self.env_indices = torch.randint(
+            0, len(self.environments), (self.num_envs,), device=self.device
+        )
+        self.env_pointers = torch.zeros(
+            (self.num_envs,), dtype=torch.int64, device=self.device
+        )
+        self.balances = (
+            torch.ones((self.num_envs, 1), device=self.device) * self.starting_balance
+        )
+        self.num_shares = torch.zeros((self.num_envs, 1), device=self.device)
 
     def step(
         self, actions: torch.Tensor
@@ -114,11 +144,40 @@ class TimeSeriesEnv:
             info dict (?)
         )
         """
-        # TODO: implement this
+        share_changes = self.get_share_changes_from_actions(actions)
+        print(share_changes)
+        # TODO: finish implementing this
+
+    def get_share_changes_from_actions(self, actions: torch.Tensor) -> torch.Tensor:
+        scaled_actions = actions * (self.max_shares + 0.5)
+        share_changes = torch.round(scaled_actions)
+        return share_changes.clamp(-self.max_shares, +self.max_shares)
 
     def reset(self) -> torch.Tensor:
-        """returns first observation tensor (N x S)"""
-        # TODO: implement this
+        data_observations: "list[torch.Tensor]" = []
+        for env_idx, env_ptr in zip(self.env_indices, self.env_pointers):
+            env = self.environments[env_idx]
+            # NOTE for optimization: it's actually possible to parallelize this with
+            # the overloaded torch.narrow() function. It will require keeping
+            # environments in a single tensor somehow...
+            data_observation = torch.narrow(
+                env, 0, env_ptr.item(), self.num_price_values
+            )
+            data_observations.append(data_observation)
+        data_observation_tensors = torch.stack(data_observations, dim=0)
+        observation_tensors = torch.cat(
+            [data_observation_tensors, self.balances, self.num_shares], dim=1
+        )
+        return observation_tensors
+
+    def reset_by_indices(self, indices: "list[int]") -> None:
+        # NOTE for optimization: this could probably be parallelized somehow, but not a
+        # high priority for now...
+        for idx in indices:
+            self.env_indices[idx] = np.random.randint(0, len(self.environments))
+            self.env_pointers[idx] = 0
+            self.balances[idx] = self.starting_balance
+            self.num_shares[idx] = 0
 
     def print(self):
         pprint(vars(self))
