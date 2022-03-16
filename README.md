@@ -18,6 +18,7 @@ HIGH PRIORITY:
 
 - create massively parallel time series environment architecture (Assignee: Momin)
 - integrate Isaac Gym environment simulation with this repo (Assignee: none)
+- create sample LSTM agent to train with PPO/TD3/SAC on time series environment and establish a baseline (Assignee: none)
 
 MEDIUM PRIORITY:
 
@@ -26,7 +27,8 @@ MEDIUM PRIORITY:
 
 LOW PRIORITY:
 
--
+- begin planning to scale evolutionary architecture from a single GPU to multiple GPUs (Assignee: none)
+  - think about tournament-based ensemble design in [ElegantRL-Podracer](https://arxiv.org/pdf/2112.05923.pdf) and decentralized distributed architecture in [DD-PPO](https://arxiv.org/pdf/1911.00357.pdf)
 
 ## Long-Term Goals
 
