@@ -15,7 +15,8 @@ class TimeSeriesEnv:
         instrument_name: str,
         num_envs: int = 2,
         max_shares: int = 5,
-        starting_balance: float = 1e4,
+        starting_balance: float = 10000,
+        per_share_commission: float = 0.01,
         num_intervals: int = 390,
         device_id: int = 0,
         testing_code: bool = False,
@@ -24,6 +25,7 @@ class TimeSeriesEnv:
         self.num_envs = num_envs
         self.max_shares = max_shares
         self.starting_balance = starting_balance
+        self.per_share_commission = per_share_commission
         self.num_intervals = num_intervals
         self.folder_name = self.get_folder_name(instrument_name)
         file_key = "dummy" if testing_code else "train"
@@ -47,7 +49,7 @@ class TimeSeriesEnv:
                 f"More than one file was found in {self.folder_name} with key {key_string}"
             )
 
-    def set_device(self, device_id: int):
+    def set_device(self, device_id: int) -> None:
         if torch.cuda.is_available():
             self.device = f"cuda:{device_id}"
         else:
@@ -56,12 +58,12 @@ class TimeSeriesEnv:
             )
             self.device = "cpu"
 
-    def process_training_data(self, path: str):
+    def process_training_data(self, path: str) -> None:
         self.read_data(path)
         self.force_market_hours()
         self.set_up_environments()
 
-    def read_data(self, path: str):
+    def read_data(self, path: str) -> None:
         print(f"Reading data for {self.instrument_name}...")
         self.df: pd.DataFrame = pd.read_csv(
             path,
@@ -70,10 +72,10 @@ class TimeSeriesEnv:
         self.df["Datetime"] = pd.to_datetime(self.df["Date"] + " " + self.df["Time"])
         self.df = self.df.set_index("Datetime")
 
-    def force_market_hours(self):
+    def force_market_hours(self) -> None:
         self.df = self.df.between_time("9:30", "15:59")
 
-    def set_up_environments(self):
+    def set_up_environments(self) -> None:
         print(f"Setting up environments for {self.instrument_name}...")
         self.environments: "list[torch.Tensor]" = []
         unique_dates = self.df["Date"].unique()
@@ -103,7 +105,7 @@ class TimeSeriesEnv:
         flattened_np_array = np_array.reshape(new_length)
         return torch.tensor(flattened_np_array, device=self.device)
 
-    def set_spaces(self):
+    def set_spaces(self) -> None:
         # observation dimension consists of:
         # {price data + balance + current number of shares}
         self.num_price_values = self.num_intervals * self.values_per_interval
@@ -121,7 +123,7 @@ class TimeSeriesEnv:
             dtype=np.float64,
         )
 
-    def set_environment_params(self):
+    def set_environment_params(self) -> None:
         self.env_indices = torch.randint(
             0, len(self.environments), (self.num_envs,), device=self.device
         )
@@ -136,24 +138,63 @@ class TimeSeriesEnv:
     def step(
         self, actions: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict]:
-        """
-        returns (
-            observation tensor (N x S),
-            reward tensor (N x 1),
-            done tensor (N x 1),
-            info dict (?)
-        )
-        """
         share_changes = self.get_share_changes_from_actions(actions)
-        print(share_changes)
-        # TODO: finish implementing this
+        self.env_pointers += self.values_per_interval
+        new_states = self.determine_new_states(share_changes)
+        rewards = self.determine_immediate_rewards()
+        dones = self.find_finished_environments()
+        # If any environments have ended, all shares should be sold in preparation for
+        # the next environment.
+        rewards -= dones * self.num_shares * self.per_share_commission
+        self.reset_finished_environments(dones)
+        return (new_states, rewards, dones, {})
 
     def get_share_changes_from_actions(self, actions: torch.Tensor) -> torch.Tensor:
         scaled_actions = actions * (self.max_shares + 0.5)
         share_changes = torch.round(scaled_actions)
-        return share_changes.clamp(-self.max_shares, +self.max_shares)
+        clamped_share_changes = share_changes.clamp(-self.max_shares, +self.max_shares)
+        return clamped_share_changes
+
+    def determine_new_states(self, share_changes: torch.Tensor) -> torch.Tensor:
+        self.set_current_prices()
+        current_open_prices = torch.select(self.current_prices, 1, 0).view(
+            self.num_envs, 1
+        )
+        self.ensure_legal_share_changes(share_changes, current_open_prices)
+        self.true_share_changes = (
+            torch.relu(self.num_shares + share_changes) - self.num_shares
+        )
+        capital_required = self.true_share_changes * current_open_prices
+        self.balances -= capital_required
+        self.num_shares += self.true_share_changes
+        return self.reset()
+
+    def set_current_prices(self) -> None:
+        current_prices: "list[torch.Tensor]" = []
+        for env_idx, env_ptr in zip(self.env_indices, self.env_pointers):
+            env = self.environments[env_idx]
+            current_price_data = torch.narrow(
+                env, 0, env_ptr.item(), self.values_per_interval
+            )
+            current_prices.append(current_price_data)
+        self.current_prices = torch.stack(current_prices, dim=0)
+
+    def ensure_legal_share_changes(
+        self, share_changes: torch.Tensor, current_open_prices: torch.Tensor
+    ) -> None:
+        not_enough_capital_mask = (
+            torch.relu(share_changes) * current_open_prices > self.balances
+        )
+        share_changes[not_enough_capital_mask] = 0
 
     def reset(self) -> torch.Tensor:
+        data_observation_tensors = self.get_price_data_observations()
+        observation_tensors = torch.cat(
+            [data_observation_tensors, self.balances, self.num_shares], dim=1
+        )
+        return observation_tensors
+
+    def get_price_data_observations(self) -> torch.Tensor:
         data_observations: "list[torch.Tensor]" = []
         for env_idx, env_ptr in zip(self.env_indices, self.env_pointers):
             env = self.environments[env_idx]
@@ -165,19 +206,38 @@ class TimeSeriesEnv:
             )
             data_observations.append(data_observation)
         data_observation_tensors = torch.stack(data_observations, dim=0)
-        observation_tensors = torch.cat(
-            [data_observation_tensors, self.balances, self.num_shares], dim=1
-        )
-        return observation_tensors
+        return data_observation_tensors
 
-    def reset_by_indices(self, indices: "list[int]") -> None:
-        # NOTE for optimization: this could probably be parallelized somehow, but not a
-        # high priority for now...
-        for idx in indices:
-            self.env_indices[idx] = np.random.randint(0, len(self.environments))
-            self.env_pointers[idx] = 0
-            self.balances[idx] = self.starting_balance
-            self.num_shares[idx] = 0
+    def determine_immediate_rewards(self) -> torch.Tensor:
+        current_open_prices = torch.select(self.current_prices, 1, 0).view(
+            self.num_envs, 1
+        )
+        current_close_prices = torch.select(self.current_prices, 1, 3).view(
+            self.num_envs, 1
+        )
+        price_change = current_close_prices - current_open_prices
+        balances_change = self.num_shares * price_change
+        total_commision = torch.abs(self.true_share_changes) * self.per_share_commission
+        return balances_change - total_commision
+
+    def find_finished_environments(self) -> torch.Tensor:
+        dones = torch.zeros(self.num_envs, 1, dtype=torch.bool, device=self.device)
+        for idx, (env_idx, env_ptr) in enumerate(
+            zip(self.env_indices, self.env_pointers)
+        ):
+            env = self.environments[env_idx]
+            if env_ptr.item() + self.values_per_interval >= env.shape[0]:
+                dones[idx] = True
+        return dones
+
+    def reset_finished_environments(self, dones: torch.Tensor) -> None:
+        horizontal_dones = dones.view(4)
+        self.env_indices[horizontal_dones] = np.random.randint(
+            0, len(self.environments)
+        )
+        self.env_pointers[horizontal_dones] = 0
+        self.balances[dones] = self.starting_balance
+        self.num_shares[dones] = 0
 
     def print(self):
         pprint(vars(self))
