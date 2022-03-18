@@ -5,24 +5,38 @@ from typing import Dict, Tuple
 
 
 class TestTimeSeriesEnv(unittest.TestCase):
-    def setUp(self):
+    @classmethod
+    def setUpClass(self):
         self.num_envs = 4
-        self.IBM_env = TimeSeriesEnv("IBM", self.num_envs, testing_code=True)
+        self.envs = [
+            TimeSeriesEnv("IBM", self.num_envs, testing_code=True),
+            TimeSeriesEnv("OIH", self.num_envs, testing_code=True),
+        ]
 
-    def test_should_reset_IBM_env(self):
-        self.assertIsInstance(self.IBM_env.reset(), torch.Tensor)
+    def test_should_reset_envs(self):
+        for env in self.envs:
+            self.assertIsInstance(env.reset(), torch.Tensor)
 
-    def test_should_step_IBM_env(self):
-        actions = torch.rand((self.num_envs, 1), device=self.IBM_env.device) * 2 - 1
-        step_info: Tuple[
-            torch.Tensor, torch.Tensor, torch.Tensor, Dict
-        ] = self.IBM_env.step(actions)
+    def test_should_step_envs(self):
+        for env in self.envs:
+            self.step_helper(env)
+
+    def step_helper(self, env: TimeSeriesEnv):
+        actions = torch.rand((self.num_envs, 1), device=env.device) * 2 - 1
+        step_info: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, Dict] = env.step(
+            actions
+        )
         self.assertIsInstance(step_info, tuple)
         (next_states, rewards, dones, info) = step_info
         self.assertIsInstance(next_states, torch.Tensor)
         self.assertIsInstance(rewards, torch.Tensor)
         self.assertIsInstance(dones, torch.Tensor)
         self.assertIsInstance(info, dict)
+
+    def test_should_step_envs_1000_times(self):
+        for _ in range(1000):
+            for env in self.envs:
+                self.step_helper(env)
 
 
 if __name__ == "__main__":
