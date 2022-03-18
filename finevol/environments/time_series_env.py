@@ -1,9 +1,9 @@
 import numpy as np
+import os
 import pandas as pd
 import torch
 from glob import glob
 from gym import spaces
-from os.path import join
 from pprint import pprint
 from tqdm import tqdm
 from typing import Tuple
@@ -27,7 +27,7 @@ class TimeSeriesEnv:
         self.starting_balance = starting_balance
         self.per_share_commission = per_share_commission
         self.num_intervals = num_intervals
-        self.folder_name = self.get_folder_name(instrument_name)
+        self.data_dir_name = self.get_data_dir_name(instrument_name)
         file_key = "dummy" if testing_code else "train"
         self.training_filename = self.find_file_by_key(file_key)
         self.set_device(device_id)
@@ -35,18 +35,26 @@ class TimeSeriesEnv:
         self.set_spaces()
         self.set_environment_params()
 
-    def get_folder_name(self, folder_name: str) -> str:
-        if "data" not in folder_name:
-            folder_name = join("data", folder_name)
-        return folder_name
+    def get_data_dir_name(self, data_dir_name: str) -> str:
+        current_dir_name = os.path.dirname(os.path.realpath(__file__))
+        if "data" not in data_dir_name:
+            data_dir_name = os.path.join(current_dir_name, "..", "data", data_dir_name)
+        return data_dir_name
 
     def find_file_by_key(self, key_string: str) -> str:
-        training_filenames = glob(join(self.folder_name, "*" + key_string + "*"))
-        if len(training_filenames) == 1:
+        training_filenames = glob(
+            os.path.join(self.data_dir_name, "*" + key_string + "*")
+        )
+        num_files = len(training_filenames)
+        if num_files == 0:
+            raise Exception(
+                f"No file was found in {self.data_dir_name} with key {key_string}"
+            )
+        elif num_files == 1:
             return training_filenames[0]
         else:
             raise Exception(
-                f"More than one file was found in {self.folder_name} with key {key_string}"
+                f"More than one file was found in {self.data_dir_name} with key {key_string}"
             )
 
     def set_device(self, device_id: int) -> None:

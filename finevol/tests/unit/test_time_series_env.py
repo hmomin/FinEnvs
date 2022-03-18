@@ -1,6 +1,6 @@
 import torch
 import unittest
-from environments.time_series_env import TimeSeriesEnv
+from finevol.environments.time_series_env import TimeSeriesEnv
 from typing import Dict, Tuple
 
 
