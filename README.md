@@ -16,8 +16,7 @@ For now, see [this Google Doc](https://docs.google.com/document/d/1ReqLKi2quQ19b
 
 HIGH PRIORITY:
 
-- create massively parallel time series environment architecture (Assignee: Momin)
-- integrate Isaac Gym environment simulation with this repo (Assignee: none)
+- integrate Isaac Gym environment simulation with this repo (Assignee: Momin)
 - create sample LSTM agent to train with PPO/TD3/SAC on time series environment and establish a baseline (Assignee: none)
 
 MEDIUM PRIORITY:
