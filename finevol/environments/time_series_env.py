@@ -234,7 +234,7 @@ class TimeSeriesEnv:
             zip(self.env_indices, self.env_pointers)
         ):
             env = self.environments[env_idx]
-            if env_ptr.item() + self.values_per_interval >= env.shape[0]:
+            if env_ptr.item() + self.num_price_values >= env.shape[0]:
                 dones[idx] = True
         return dones
 
