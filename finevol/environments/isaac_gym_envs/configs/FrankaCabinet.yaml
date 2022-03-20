@@ -1,11 +1,13 @@
 # used to create the object
 name: FrankaCabinet
 
-physics_engine: ${..physics_engine}
+physics_engine: physx
 
-# if given, will override the device setting in gym. 
+# if given, will override the device setting in gym.
 env:
-  numEnvs: ${resolve_default:4096,${...num_envs}}
+  numEnvs: 4096
+  numObservations: 23
+  numActions: 9
   envSpacing: 1.5
   episodeLength: 500
   enableDebugVis: False
@@ -29,9 +31,9 @@ env:
   actionPenaltyScale: 0.01
 
   asset:
-    assetRoot: "../../assets"
-    assetFileNameFranka: "urdf/franka_description/robots/franka_panda.urdf"
-    assetFileNameCabinet: "urdf/sektion_cabinet_model/urdf/sektion_cabinet_2.urdf"
+    assetRoot: '../assets'
+    assetFileNameFranka: 'urdf/franka_description/robots/franka_panda.urdf'
+    assetFileNameCabinet: 'urdf/sektion_cabinet_model/urdf/sektion_cabinet_2.urdf'
 
   # set to True if you use camera sensors in the environment
   enableCameraSensors: False
@@ -39,13 +41,13 @@ env:
 sim:
   dt: 0.0166 # 1/60
   substeps: 1
-  up_axis: "z"
-  use_gpu_pipeline: ${eq:${...pipeline},"gpu"}
+  up_axis: 'z'
+  use_gpu_pipeline: True
   gravity: [0.0, 0.0, -9.81]
   physx:
-    num_threads: ${....num_threads}
-    solver_type: ${....solver_type}
-    use_gpu: ${contains:"cuda",${....sim_device}} # set to False to run on CPU
+    num_threads: 4
+    solver_type: 1
+    use_gpu: True # set to False to run on CPU
     num_position_iterations: 12
     num_velocity_iterations: 1
     contact_offset: 0.005
@@ -54,7 +56,7 @@ sim:
     max_depenetration_velocity: 1000.0
     default_buffer_size_multiplier: 5.0
     max_gpu_contact_pairs: 1048576 # 1024*1024
-    num_subscenes: ${....num_subscenes}
+    num_subscenes: 0
     contact_collection: 0 # 0: CC_NEVER (don't collect contact info), 1: CC_LAST_SUBSTEP (collect only contacts on last substep), 2: CC_ALL_SUBSTEPS (default - all contacts)
 
 task:
