@@ -34,8 +34,8 @@ from isaacgym import gymtorch
 from isaacgym import gymapi
 from isaacgym.torch_utils import *
 
-from torch_jit_utils import *
-from base.vec_task import VecTask
+from ..utils.torch_jit_utils import *
+from .base.vec_task import VecTask
 
 
 class Humanoid(VecTask):
@@ -178,7 +178,7 @@ class Humanoid(VecTask):
         upper = gymapi.Vec3(spacing, spacing, spacing)
 
         asset_root = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "../../assets"
+            os.path.dirname(os.path.abspath(__file__)), "../assets"
         )
         asset_file = "mjcf/nv_humanoid.xml"
 

@@ -26,18 +26,18 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from allegro_hand import AllegroHand
-from ant import Ant
-from anymal import Anymal
-from anymal_terrain import AnymalTerrain
-from ball_balance import BallBalance
-from cartpole import Cartpole
-from franka_cabinet import FrankaCabinet
-from humanoid import Humanoid
-from ingenuity import Ingenuity
-from quadcopter import Quadcopter
-from shadow_hand import ShadowHand
-from trifinger import Trifinger
+from .allegro_hand import AllegroHand
+from .ant import Ant
+from .anymal import Anymal
+from .anymal_terrain import AnymalTerrain
+from .ball_balance import BallBalance
+from .cartpole import Cartpole
+from .franka_cabinet import FrankaCabinet
+from .humanoid import Humanoid
+from .ingenuity import Ingenuity
+from .quadcopter import Quadcopter
+from .shadow_hand import ShadowHand
+from .trifinger import Trifinger
 
 # Mappings from strings to environments
 isaacgym_task_map = {

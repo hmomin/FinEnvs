@@ -31,7 +31,7 @@ import os
 import torch
 
 from isaacgym import gymutil, gymtorch, gymapi
-from base.vec_task import VecTask
+from .base.vec_task import VecTask
 
 
 class Cartpole(VecTask):
@@ -85,7 +85,7 @@ class Cartpole(VecTask):
         upper = gymapi.Vec3(0.5 * spacing, spacing, spacing)
 
         asset_root = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "../../assets"
+            os.path.dirname(os.path.abspath(__file__)), "../assets"
         )
         asset_file = "urdf/cartpole.urdf"
 

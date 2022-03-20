@@ -33,8 +33,8 @@ import torch
 import xml.etree.ElementTree as ET
 
 from isaacgym import gymutil, gymtorch, gymapi
-from torch_jit_utils import *
-from base.vec_task import VecTask
+from ..utils.torch_jit_utils import *
+from .base.vec_task import VecTask
 
 
 class Quadcopter(VecTask):
@@ -252,7 +252,9 @@ class Quadcopter(VecTask):
             roll_joint.attrib["range"] = "-30 30"
 
         gymutil._indent_xml(root)
-        ET.ElementTree(root).write("quadcopter.xml")
+        current_dir_name = os.path.dirname(os.path.realpath(__file__))
+        asset_root = os.path.join(current_dir_name, "..", "assets")
+        ET.ElementTree(root).write(os.path.join(asset_root, "quadcopter.xml"))
 
     def _create_ground_plane(self):
         plane_params = gymapi.PlaneParams()
@@ -263,7 +265,9 @@ class Quadcopter(VecTask):
         lower = gymapi.Vec3(-spacing, -spacing, 0.0)
         upper = gymapi.Vec3(spacing, spacing, spacing)
 
-        asset_root = "."
+        asset_root = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "../assets"
+        )
         asset_file = "quadcopter.xml"
 
         asset_options = gymapi.AssetOptions()

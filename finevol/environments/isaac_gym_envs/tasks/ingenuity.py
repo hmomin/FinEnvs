@@ -32,8 +32,8 @@ import os
 import torch
 import xml.etree.ElementTree as ET
 
-from torch_jit_utils import *
-from base.vec_task import VecTask
+from ..utils.torch_jit_utils import *
+from .base.vec_task import VecTask
 
 from isaacgym import gymutil, gymtorch, gymapi
 
@@ -287,7 +287,9 @@ class Ingenuity(VecTask):
             dummy_roll_joint.attrib["pos"] = "%g %g %g" % (0, 0, 0)
 
         gymutil._indent_xml(root)
-        ET.ElementTree(root).write("ingenuity.xml")
+        current_dir_name = os.path.dirname(os.path.realpath(__file__))
+        asset_root = os.path.join(current_dir_name, "..", "assets")
+        ET.ElementTree(root).write(os.path.join(asset_root, "ingenuity.xml"))
 
     def _create_ground_plane(self):
         plane_params = gymapi.PlaneParams()
@@ -298,7 +300,9 @@ class Ingenuity(VecTask):
         lower = gymapi.Vec3(-spacing, -spacing, 0.0)
         upper = gymapi.Vec3(spacing, spacing, spacing)
 
-        asset_root = "./"
+        asset_root = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "../assets"
+        )
         asset_file = "ingenuity.xml"
 
         asset_options = gymapi.AssetOptions()

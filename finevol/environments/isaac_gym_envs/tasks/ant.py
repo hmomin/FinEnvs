@@ -34,8 +34,8 @@ from isaacgym import gymtorch
 from isaacgym import gymapi
 from isaacgym.gymtorch import *
 
-from torch_jit_utils import *
-from base.vec_task import VecTask
+from ..utils.torch_jit_utils import *
+from .base.vec_task import VecTask
 
 
 class Ant(VecTask):
@@ -173,7 +173,7 @@ class Ant(VecTask):
         upper = gymapi.Vec3(spacing, spacing, spacing)
 
         asset_root = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "../../assets"
+            os.path.dirname(os.path.abspath(__file__)), "../assets"
         )
         asset_file = "mjcf/nv_ant.xml"
 

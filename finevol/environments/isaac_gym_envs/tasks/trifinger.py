@@ -38,8 +38,8 @@ from collections import OrderedDict
 
 project_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
-from torch_jit_utils import *
-from base.vec_task import VecTask
+from ..utils.torch_jit_utils import *
+from .base.vec_task import VecTask
 from types import SimpleNamespace
 from collections import deque
 from typing import Deque, Dict, Tuple, Union
@@ -180,7 +180,7 @@ class Trifinger(VecTask):
 
     # constants
     # directory where assets for the simulator are present
-    _trifinger_assets_dir = os.path.join(project_dir, "../", "assets", "trifinger")
+    _trifinger_assets_dir = os.path.join(project_dir, "assets", "trifinger")
     # robot urdf (path relative to `_trifinger_assets_dir`)
     _robot_urdf_file = "robot_properties_fingers/urdf/pro/trifingerpro.urdf"
     # stage urdf (path relative to `_trifinger_assets_dir`)

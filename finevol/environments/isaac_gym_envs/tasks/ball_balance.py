@@ -34,7 +34,7 @@ import xml.etree.ElementTree as ET
 
 from isaacgym import gymutil, gymtorch, gymapi
 from isaacgym.torch_utils import *
-from base.vec_task import VecTask
+from .base.vec_task import VecTask
 
 
 def _indent_xml(elem, level=0):
@@ -257,7 +257,9 @@ class BallBalance(VecTask):
             lower_leg_joint.attrib["range"] = "-70 90"
 
         _indent_xml(root)
-        ET.ElementTree(root).write("balance_bot.xml")
+        current_dir_name = os.path.dirname(os.path.realpath(__file__))
+        asset_root = os.path.join(current_dir_name, "..", "assets")
+        ET.ElementTree(root).write(os.path.join(asset_root, "balance_bot.xml"))
 
         # save some useful robot parameters
         self.tray_height = tray_height
@@ -275,7 +277,9 @@ class BallBalance(VecTask):
         lower = gymapi.Vec3(-spacing, -spacing, 0.0)
         upper = gymapi.Vec3(spacing, spacing, spacing)
 
-        asset_root = "."
+        current_dir_name = os.path.dirname(os.path.realpath(__file__))
+
+        asset_root = os.path.join(current_dir_name, "..", "assets")
         asset_file = "balance_bot.xml"
 
         asset_path = os.path.join(asset_root, asset_file)
