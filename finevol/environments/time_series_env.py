@@ -2,6 +2,7 @@ import numpy as np
 import os
 import pandas as pd
 import torch
+from ..device_utils import set_device
 from glob import glob
 from gym import spaces
 from pprint import pprint
@@ -30,7 +31,7 @@ class TimeSeriesEnv:
         self.data_dir_name = self.get_data_dir_name(instrument_name)
         file_key = "dummy" if testing_code else "train"
         self.training_filename = self.find_file_by_key(file_key)
-        self.set_device(device_id)
+        self.device = set_device(device_id)
         self.process_training_data(self.training_filename)
         self.set_spaces()
         self.set_environment_params()
@@ -56,15 +57,6 @@ class TimeSeriesEnv:
             raise Exception(
                 f"More than one file was found in {self.data_dir_name} with key {key_string}"
             )
-
-    def set_device(self, device_id: int) -> None:
-        if torch.cuda.is_available():
-            self.device = f"cuda:{device_id}"
-        else:
-            print(
-                "WARNING: PyTorch is not recognizing a valid CUDA device -> forcing CPU..."
-            )
-            self.device = "cpu"
 
     def process_training_data(self, path: str) -> None:
         self.read_data(path)
@@ -206,7 +198,7 @@ class TimeSeriesEnv:
         data_observations: "list[torch.Tensor]" = []
         for env_idx, env_ptr in zip(self.env_indices, self.env_pointers):
             env = self.environments[env_idx]
-            # NOTE for optimization: it's actually possible to parallelize this with
+            # NOTE: for optimization, it's actually possible to parallelize this with
             # the overloaded torch.narrow() function. It will require keeping
             # environments in a single tensor somehow...
             data_observation = torch.narrow(
