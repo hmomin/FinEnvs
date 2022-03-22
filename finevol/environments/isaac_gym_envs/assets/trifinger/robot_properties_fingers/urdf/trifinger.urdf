@@ -142,7 +142,7 @@
     <origin xyz="0 0 -0.16"/>
   </joint>
   <!-- kinematics -->
-  <!-- TODO: joint limits are based on values from wiki
+  <!-- TODO_NVIDIA: joint limits are based on values from wiki
         (https://atlas.is.localnet/confluence/display/AMDW/Forward+Kinematics) but
         should be verified on the real system (especially the finger tip limits look
         a bit too big when visualizing the model. -->
@@ -266,7 +266,7 @@
     <origin xyz="0 0 -0.16"/>
   </joint>
   <!-- kinematics -->
-  <!-- TODO: joint limits are based on values from wiki
+  <!-- TODO_NVIDIA: joint limits are based on values from wiki
         (https://atlas.is.localnet/confluence/display/AMDW/Forward+Kinematics) but
         should be verified on the real system (especially the finger tip limits look
         a bit too big when visualizing the model. -->
@@ -390,7 +390,7 @@
     <origin xyz="0 0 -0.16"/>
   </joint>
   <!-- kinematics -->
-  <!-- TODO: joint limits are based on values from wiki
+  <!-- TODO_NVIDIA: joint limits are based on values from wiki
         (https://atlas.is.localnet/confluence/display/AMDW/Forward+Kinematics) but
         should be verified on the real system (especially the finger tip limits look
         a bit too big when visualizing the model. -->

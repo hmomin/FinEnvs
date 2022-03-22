@@ -57,7 +57,7 @@
   </joint>
   <!--
         Fixed links for the finger base (parts where the upper link is mounted).
-        Note: Link Frames already coincide with the joint location
+        NOTE_NVIDIA: Link Frames already coincide with the joint location
         -->
   <link name="finger_base_link_0">
     <inertial>
@@ -242,7 +242,7 @@
     <origin xyz="0.019 0 -0.16"/>
   </joint>
   <!-- kinematics -->
-  <!-- NOTE: Joint limits are set according to soft limits in the
+  <!-- NOTE_NVIDIA: Joint limits are set according to soft limits in the
              configuration of the real robot (i.e. not according to physical
              limits). -->
   <joint name="finger_base_to_upper_joint_0" type="revolute">
@@ -268,7 +268,7 @@
   </joint>
   <!--
         Fixed links for the finger base (parts where the upper link is mounted).
-        Note: Link Frames already coincide with the joint location
+        NOTE_NVIDIA: Link Frames already coincide with the joint location
         -->
   <link name="finger_base_link_120">
     <inertial>
@@ -453,7 +453,7 @@
     <origin xyz="0.019 0 -0.16"/>
   </joint>
   <!-- kinematics -->
-  <!-- NOTE: Joint limits are set according to soft limits in the
+  <!-- NOTE_NVIDIA: Joint limits are set according to soft limits in the
              configuration of the real robot (i.e. not according to physical
              limits). -->
   <joint name="finger_base_to_upper_joint_120" type="revolute">
@@ -479,7 +479,7 @@
   </joint>
   <!--
         Fixed links for the finger base (parts where the upper link is mounted).
-        Note: Link Frames already coincide with the joint location
+        NOTE_NVIDIA: Link Frames already coincide with the joint location
         -->
   <link name="finger_base_link_240">
     <inertial>
@@ -664,7 +664,7 @@
     <origin xyz="0.019 0 -0.16"/>
   </joint>
   <!-- kinematics -->
-  <!-- NOTE: Joint limits are set according to soft limits in the
+  <!-- NOTE_NVIDIA: Joint limits are set according to soft limits in the
              configuration of the real robot (i.e. not according to physical
              limits). -->
   <joint name="finger_base_to_upper_joint_240" type="revolute">

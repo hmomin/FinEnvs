@@ -35,7 +35,7 @@
   </material>
   <!--
         Fixed links for the finger base (parts where the upper link is mounted).
-        Note: Link Frames already coincide with the joint location
+        NOTE_NVIDIA: Link Frames already coincide with the joint location
         -->
   <link name="finger_base_link">
     <inertial>
@@ -220,7 +220,7 @@
     <origin xyz="0.019 0 -0.16"/>
   </joint>
   <!-- kinematics -->
-  <!-- NOTE: Joint limits are set according to soft limits in the
+  <!-- NOTE_NVIDIA: Joint limits are set according to soft limits in the
              configuration of the real robot (i.e. not according to physical
              limits). -->
   <joint name="finger_base_to_upper_joint" type="revolute">
@@ -246,7 +246,7 @@
   </joint>
   <!--
     Define the global base link and place the finger relative to it.
-    Note: Here I've used the center point of the center piece as the origin 
+    NOTE_NVIDIA: Here I've used the center point of the center piece as the origin 
     -->
   <link name="base_link">
     <!-- add inertial to suppress warning -->

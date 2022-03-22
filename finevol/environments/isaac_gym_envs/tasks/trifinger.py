@@ -58,7 +58,7 @@ class TrifingerDimensions(enum.Enum):
     """
     Dimensions of the tri-finger robot.
 
-    Note: While it may not seem necessary for tri-finger robot since it is fixed base, for floating
+    NOTE_NVIDIA: While it may not seem necessary for tri-finger robot since it is fixed base, for floating
     base systems having this dimensions class is useful.
     """
 
@@ -188,11 +188,11 @@ class Trifinger(VecTask):
     _table_urdf_file = "robot_properties_fingers/urdf/table_without_border.urdf"
     _boundary_urdf_file = "robot_properties_fingers/urdf/high_table_boundary.urdf"
     # object urdf (path relative to `_trifinger_assets_dir`)
-    # TODO: Make object URDF configurable.
+    # TODO_NVIDIA: Make object URDF configurable.
     _object_urdf_file = "objects/urdf/cube_multicolor_rrc.urdf"
 
     # physical dimensions of the object
-    # TODO: Make object dimensions configurable.
+    # TODO_NVIDIA: Make object dimensions configurable.
     _object_dims = CuboidalObject(0.065)
     # dimensions of the system
     _dims = TrifingerDimensions
@@ -204,7 +204,7 @@ class Trifinger(VecTask):
     _max_velocity_radps = 10
 
     # History of state: Number of timesteps to save history for
-    # Note: Currently used only to manage history of object and frame states.
+    # NOTE_NVIDIA: Currently used only to manage history of object and frame states.
     #       This can be extended to other observations (as done in ANYmal).
     _state_history_len = 2
 
@@ -325,7 +325,7 @@ class Trifinger(VecTask):
     # Ref: https://github.com/rr-learning/rrc_simulation/blob/master/python/rrc_simulation/sim_finger.py#L49-L65
     _robot_dof_gains = {
         # The kp and kd gains of the PD control of the fingers.
-        # Note: This depends on simulation step size and is set for a rate of 250 Hz.
+        # NOTE_NVIDIA: This depends on simulation step size and is set for a rate of 250 Hz.
         "stiffness": [10.0, 10.0, 10.0] * _dims.NumFingers.value,
         "damping": [0.1, 0.3, 0.001] * _dims.NumFingers.value,
         # The kd gains used for damping the joint motor velocities during the
@@ -581,7 +581,7 @@ class Trifinger(VecTask):
         robot_dof_props = self.gym.get_asset_dof_properties(self.gym_assets["robot"])
         # set dof properites based on the control mode
         for k, dof_index in enumerate(self._robot_dof_indices.values()):
-            # note: since safety checks are employed, the simulator PD controller is not
+            # NOTE_NVIDIA: since safety checks are employed, the simulator PD controller is not
             #       used. Instead the torque is computed manually and applied, even if the
             #       command mode is 'position'.
             robot_dof_props["driveMode"][dof_index] = gymapi.DOF_MODE_EFFORT
@@ -610,7 +610,7 @@ class Trifinger(VecTask):
         )
         num_envs_per_row = int(np.sqrt(self.num_envs))
         # initialize gym indices buffer as a list
-        # note: later the list is converted to torch tensor for ease in interfacing with IsaacGym.
+        # NOTE_NVIDIA: later the list is converted to torch tensor for ease in interfacing with IsaacGym.
         for asset_name in self.gym_indices.keys():
             self.gym_indices[asset_name] = list()
         # count number of shapes and bodies
@@ -731,7 +731,7 @@ class Trifinger(VecTask):
         Configures the observations, state and action spaces.
         """
         # Action scale for the MDP
-        # Note: This is order sensitive.
+        # NOTE_NVIDIA: This is order sensitive.
         if self.cfg["env"]["command_mode"] == "position":
             # action space is joint positions
             self._action_scale.low = self._robot_limits["joint_position"].low
@@ -773,7 +773,7 @@ class Trifinger(VecTask):
             * 2
         )
 
-        # Note: This is order sensitive.
+        # NOTE_NVIDIA: This is order sensitive.
         self._observations_scale.low = torch.cat(
             [
                 self._robot_limits["joint_position"].low,
@@ -827,7 +827,7 @@ class Trifinger(VecTask):
                     self._dims.NumFingers.value
                 ),
             ]
-            # Note: This is order sensitive.
+            # NOTE_NVIDIA: This is order sensitive.
             self._states_scale.low = torch.cat(states_low)
             self._states_scale.high = torch.cat(states_high)
         # check that dimensions of scalings are correct
@@ -1205,7 +1205,7 @@ class Trifinger(VecTask):
             orientation = default_orientation(num_samples, self.device)
         elif difficulty == 4:
             # Random goal pose in the air, including orientation.
-            # Note: Set minimum height such that the cube does not intersect with the
+            # NOTE_NVIDIA: Set minimum height such that the cube does not intersect with the
             #       ground in any orientation
             max_goal_radius = self._object_dims.max_com_distance_to_center
             max_height = self._object_dims.max_height
@@ -1247,7 +1247,7 @@ class Trifinger(VecTask):
 
         # if normalized_action is true, then denormalize them.
         if self.cfg["env"]["normalize_action"]:
-            # TODO: Default action should correspond to normalized value of 0.
+            # TODO_NVIDIA: Default action should correspond to normalized value of 0.
             action_transformed = unscale_transform(
                 self.actions,
                 lower=self._action_scale.low,
@@ -1426,7 +1426,7 @@ class Trifinger(VecTask):
                     trifinger_asset, fingertip_handle, sensor_pose
                 )
         # extract the dof indices
-        # Note: need to write actuated dofs manually since the system contains fixed joints as well which show up.
+        # NOTE_NVIDIA: need to write actuated dofs manually since the system contains fixed joints as well which show up.
         for dof_name in self._robot_dof_indices.keys():
             self._robot_dof_indices[dof_name] = self.gym.find_asset_dof_index(
                 trifinger_asset, dof_name

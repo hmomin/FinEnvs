@@ -93,7 +93,7 @@
     </inertial>
   </link>
   <!-- The movable links (upper, middle and lower) of the finger. -->
-  <!-- FIXME inertias are not correct! -->
+  <!-- FIXME_NVIDIA inertias are not correct! -->
   <link name="finger_upper_link">
     <visual>
       <origin rpy="0 0 0" xyz="0.0195 0 0"/>
@@ -109,7 +109,7 @@
       </geometry>
     </collision>
     <inertial>
-      <!-- Note: This uses the values from the middle link, assuming
+      <!-- NOTE_NVIDIA: This uses the values from the middle link, assuming
                      that it is similar enough. -->
       <!-- CoM is only estimated based -->
       <origin rpy="0 0 0" xyz="-0.079 0 0"/>
@@ -151,7 +151,7 @@
         <mesh filename="package://robot_properties_fingers/meshes/edu/lower_link.stl" scale="1 1 1"/>
       </geometry>
     </collision>
-    <!-- TODO: these are the interial values from the Solo lower leg
+    <!-- TODO_NVIDIA: these are the interial values from the Solo lower leg
                  link which is similar but not exactly the same to the FingerEdu
                  lower link. -->
     <inertial>

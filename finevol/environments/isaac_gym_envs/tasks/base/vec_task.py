@@ -222,7 +222,7 @@ class VecTask(Env):
     def set_viewer(self):
         """Create the viewer."""
 
-        # todo: read from config
+        # TODO_NVIDIA: read from config
         self.enable_viewer_sync = True
         self.viewer = None
 

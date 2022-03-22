@@ -963,7 +963,7 @@ Center of Mass:
   <!-- ============================================================================= -->
 
   <!-- Create a different *root* for the allegro hand -->
-  <!-- Note: this offset is just eyeballed... -->
+  <!-- NOTE_NVIDIA: this offset is just eyeballed... -->
   <joint name="iiwa7_allegro" type="fixed">
     <parent link="iiwa7_link_ee"/>
     <child link="allegro_mount"/>
