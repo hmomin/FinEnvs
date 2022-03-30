@@ -119,10 +119,10 @@ class PPOAgentMLP:
             self.current_returns[-1] = 0
         self.current_returns[training_done_indices] = 0
 
-    def log_progress(self) -> None:
-        if self.evaluation_return == None:
-            return
+    def log_progress(self) -> bool:
         self.num_samples += self.get_buffer_size()
+        if self.evaluation_return == None:
+            return False
         evaluation_return = self.evaluation_return
         num_training_episodes = self.training_returns.shape[0]
         mean_training_return = self.training_returns.mean().item()
@@ -149,6 +149,7 @@ class PPOAgentMLP:
             (0, 1), device=self.device, requires_grad=False
         )
         self.evaluation_return = None
+        return True
 
     def train(self, current_states: torch.Tensor) -> int:
         current_state_values = self.critic.forward(current_states).detach()
@@ -174,6 +175,6 @@ class PPOAgentMLP:
                     mini_batch_advantages,
                 )
                 self.critic.gradient_descent_step(mini_batch_states, mini_batch_returns)
-        self.log_progress()
+        progress_logged = self.log_progress()
         self.buffer.clear()
-        return self.num_samples
+        return self.num_samples if progress_logged else 0
