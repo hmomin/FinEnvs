@@ -18,3 +18,4 @@ A model example of this entire workflow can be found [here](https://github.com/A
   - If a function stretches beyond 20-30 lines, there is almost certainly a piece of logic in there that can be abstracted out into its own function - think about it!
 - If a long comment would stretch beyond 88 columns, it should be wrapped over to the next line to prevent horizontal scrolling. Most modern IDEs will tell you what column your cursor is at.
 - For general clean code practices, see [Uncle Bob's clean coding lessons](https://www.youtube.com/playlist?list=PLmmYSbUCWJ4x1GO839azG_BBw8rkh-zOj). The first two videos are excellent - the videos become less useful as you progress through them.
+  - ["There is no trade-off of quality vs. speed in software. There never has been. Low quality means low speed. Always. The only way to go fast is to go well."](https://twitter.com/unclebobmartin/status/1163789159309434880)
