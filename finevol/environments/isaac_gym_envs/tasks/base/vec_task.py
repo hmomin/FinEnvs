@@ -75,7 +75,7 @@ class Env(ABC):
         self.device_id = int(split_device[1]) if len(split_device) > 1 else 0
 
         self.device = "cpu"
-        if config["sim"]["use_gpu_pipeline"]:
+        if config["sim"]["use_gpu_pipeline"] and torch.cuda.is_available():
             if self.device_type.lower() == "cuda" or self.device_type.lower() == "gpu":
                 self.device = "cuda" + ":" + str(self.device_id)
             else:
@@ -84,7 +84,9 @@ class Env(ABC):
                 )
                 config["sim"]["use_gpu_pipeline"] = False
 
-        self.rl_device = config.get("rl_device", "cuda:0")
+        self.rl_device = (
+            config.get("rl_device", "cuda:0") if torch.cuda.is_available() else "cpu"
+        )
 
         # Rendering
         # if training in a headless mode
@@ -486,7 +488,9 @@ class VecTask(Env):
         # assign general sim parameters
         sim_params.dt = config_sim["dt"]
         sim_params.num_client_threads = config_sim.get("num_client_threads", 0)
-        sim_params.use_gpu_pipeline = config_sim["use_gpu_pipeline"]
+        sim_params.use_gpu_pipeline = (
+            config_sim["use_gpu_pipeline"] if torch.cuda.is_available() else False
+        )
         sim_params.substeps = config_sim.get("substeps", 2)
 
         # assign up-axis
