@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
-from ..device_utils import set_device
+from ...device_utils import set_device
 from torch.distributions.normal import Normal
 from torch.optim import Adam
 

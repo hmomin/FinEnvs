@@ -1,6 +1,6 @@
 import torch
 import unittest
-from finevol.agents.multilayer_perceptron import ContinuousActor, Critic
+from finevol.agents.networks.multilayer_perceptron import ContinuousActor, Critic
 
 
 class TestMLPNetworks(unittest.TestCase):

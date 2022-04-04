@@ -4,7 +4,7 @@ import torch
 from .buffer import Buffer
 from datetime import datetime
 from ..device_utils import set_device
-from .multilayer_perceptron import ContinuousActor, Critic
+from .networks.multilayer_perceptron import ContinuousActor, Critic
 from time import time
 from typing import Tuple, Dict
 
