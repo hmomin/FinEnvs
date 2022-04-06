@@ -17,6 +17,8 @@ For now, see [this Google Doc](https://docs.google.com/document/d/1ReqLKi2quQ19b
 HIGH PRIORITY:
 
 - create sample LSTM agent to train with PPO on time series environment and establish a baseline (Assignee: Momin)
+- create sample LSTM agent to train with TD3/SAC on time series environment and compare to PPO LSTM agent - essentially, make a case for PPO over TD3/SAC for this project specifically (Assignee: Raghavan)
+  - TD3/SAC and off-policy algorithms in general probably don't benefit much from the parallelization that Isaac Gym has to offer. As many NVIDIA engineers have found, it's better to update the policy as quickly as possible while training. In other words, PPO can update its policy more quickly as a result of massive parallelization, but TD3 and SAC can't.
 
 MEDIUM PRIORITY:
 
@@ -27,8 +29,6 @@ LOW PRIORITY:
 
 - begin planning to scale evolutionary architecture from a single GPU to multiple GPUs (Assignee: none)
   - think about tournament-based ensemble design in [ElegantRL-Podracer](https://arxiv.org/pdf/2112.05923.pdf) and decentralized distributed architecture in [DD-PPO](https://arxiv.org/pdf/1911.00357.pdf)
-- create sample LSTM agent to train with TD3/SAC on time series environment and compare to PPO LSTM agent - essentially, make a case for PPO over TD3/SAC for this project specifically (Assignee: none)
-  - TD3/SAC and off-policy algorithms in general probably don't benefit much from the parallelization that Isaac Gym has to offer. As many NVIDIA engineers have found, it's better to update the policy as quickly as possible while training. In other words, PPO can update its policy more quickly as a result of massive parallelization, but TD3 and SAC can't.
 
 ## Long-Term Goals
 
