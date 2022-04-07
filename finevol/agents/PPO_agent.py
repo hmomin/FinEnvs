@@ -2,22 +2,21 @@ import csv
 import os
 import torch
 from .buffer import Buffer
+from .continuous_actor import ContinuousActor, ContinuousActorLSTM, ContinuousActorMLP
+from .critic import Critic, CriticLSTM, CriticMLP
 from datetime import datetime
 from ..device_utils import set_device
-from .networks.multilayer_perceptron import ContinuousActor, Critic
 from time import time
 from typing import Tuple, Dict
 
 
-class PPOAgentMLP:
+class PPOAgent(object):
     def __init__(
         self,
         env_args: Dict,
-        num_epochs: int = 4,
-        num_mini_batches: int = 4,
-        learning_rate: float = 3e-4,
-        starting_std_dev: float = 1.0,
-        hidden_dims: Tuple[int] = (128, 128),
+        num_epochs: int,
+        num_mini_batches: int,
+        hidden_dims: Tuple[int],
         clip_epsilon: float = 0.2,
         gamma: float = 0.99,
         write_to_csv: bool = True,
@@ -28,14 +27,6 @@ class PPOAgentMLP:
         self.num_epochs = num_epochs
         self.clip_epsilon = clip_epsilon
         self.set_network_shapes(hidden_dims)
-        self.actor = ContinuousActor(
-            self.actor_shape,
-            learning_rate,
-            starting_std_dev,
-            clip_epsilon,
-            device_id=device_id,
-        )
-        self.critic = Critic(self.critic_shape, learning_rate, device_id=device_id)
         self.buffer = Buffer(num_mini_batches, gamma, device_id)
         self.current_returns = torch.zeros(
             (self.num_envs,), device=self.device, requires_grad=False
@@ -48,6 +39,16 @@ class PPOAgentMLP:
         self.write_to_csv = write_to_csv
         if write_to_csv:
             self.create_progress_log()
+        self.actor: ContinuousActor = None
+        self.critic: Critic = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls is PPOAgent:
+            raise TypeError(
+                "'PPOAgent' should not be directly instantiated. "
+                + "Try 'PPOAgentMLP' or 'PPOAgentLSTM' instead."
+            )
+        return object.__new__(cls)
 
     def set_env_params(self, env_args: Dict) -> None:
         self.env_name: str = env_args["env_name"]
@@ -178,3 +179,72 @@ class PPOAgentMLP:
         progress_logged = self.log_progress()
         self.buffer.clear()
         return self.num_samples if progress_logged else 0
+
+
+class PPOAgentMLP(PPOAgent):
+    def __init__(
+        self,
+        env_args: Dict,
+        num_epochs: int = 4,
+        num_mini_batches: int = 4,
+        learning_rate: float = 3e-4,
+        starting_std_dev: float = 1.0,
+        hidden_dims: Tuple[int] = (128, 128),
+        clip_epsilon: float = 0.2,
+        gamma: float = 0.99,
+        write_to_csv: bool = True,
+        device_id: int = 0,
+    ):
+        super().__init__(
+            env_args=env_args,
+            num_epochs=num_epochs,
+            num_mini_batches=num_mini_batches,
+            hidden_dims=hidden_dims,
+            clip_epsilon=clip_epsilon,
+            gamma=gamma,
+            write_to_csv=write_to_csv,
+            device_id=device_id,
+        )
+        self.actor = ContinuousActorMLP(
+            self.actor_shape,
+            learning_rate,
+            starting_std_dev,
+            clip_epsilon,
+            device_id=device_id,
+        )
+        self.critic = CriticMLP(self.critic_shape, learning_rate, device_id=device_id)
+
+
+class PPOAgentLSTM(PPOAgent):
+    def __init__(
+        self,
+        env_args: Dict,
+        num_epochs: int = 4,
+        num_mini_batches: int = 4,
+        learning_rate: float = 3e-4,
+        starting_std_dev: float = 1.0,
+        hidden_dim: int = 128,
+        clip_epsilon: float = 0.2,
+        gamma: float = 0.99,
+        write_to_csv: bool = True,
+        device_id: int = 0,
+    ):
+        hidden_dims = (hidden_dim,)
+        super().__init__(
+            env_args=env_args,
+            num_epochs=num_epochs,
+            num_mini_batches=num_mini_batches,
+            hidden_dims=hidden_dims,
+            clip_epsilon=clip_epsilon,
+            gamma=gamma,
+            write_to_csv=write_to_csv,
+            device_id=device_id,
+        )
+        self.actor = ContinuousActorLSTM(
+            self.actor_shape,
+            learning_rate,
+            starting_std_dev,
+            clip_epsilon,
+            device_id=device_id,
+        )
+        self.critic = CriticLSTM(self.critic_shape, learning_rate, device_id=device_id)
