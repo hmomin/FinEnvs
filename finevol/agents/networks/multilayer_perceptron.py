@@ -11,7 +11,7 @@ class MLPNetwork(GenericNetwork):
         output_activation=nn.Identity,
         device_id: int = 0,
     ):
-        super(MLPNetwork, self).__init__(device_id=device_id)
+        super().__init__(device_id=device_id)
         self.create_layers(shape, layer_activation, output_activation)
 
     def create_layers(self, shape: tuple, layer_activation, output_activation) -> None:
