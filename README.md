@@ -8,7 +8,7 @@
 
 # FinEvol: Comparing Scalable Neuroevolution with Deep Reinforcement Learning in Quantitative Finance Applications
 
-See [this Google Doc](https://docs.google.com/document/d/1ReqLKi2quQ19b96IR96vgH8gcuK-KlZLVckwZtJOBeM) for the current project proposal.
+For the current project proposal, see [this document](https://www.overleaf.com/read/pfjjvzcbpnmt).
 
 ## Long-Term Goals
 
