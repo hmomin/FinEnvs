@@ -1,6 +1,6 @@
 import torch
 import unittest
-from finevol.agents.networks.multilayer_perceptron import MLPNetwork
+from finevo.agents.networks.multilayer_perceptron import MLPNetwork
 
 
 class TestMLPNetworks(unittest.TestCase):

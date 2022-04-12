@@ -1,8 +1,8 @@
 import isaacgym
 import unittest
-from finevol.agents.PPO_agent import PPOAgentMLP, PPOAgentLSTM
-from finevol.environments.isaac_gym_env import IsaacGymEnv
-from finevol.environments.isaac_gym_envs.utils.config_utils import (
+from finevo.agents.PPO_agent import PPOAgentMLP, PPOAgentLSTM
+from finevo.environments.isaac_gym_env import IsaacGymEnv
+from finevo.environments.isaac_gym_envs.utils.config_utils import (
     get_isaac_gym_env_args,
 )
 
