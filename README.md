@@ -1,3 +1,5 @@
+![FinEvo Logo](./logo.png)
+
 # FinEvo: Comparing Scalable Neuroevolution with Deep Reinforcement Learning in Quantitative Finance Applications
 
 For the current project proposal, see [this document](https://www.overleaf.com/read/pfjjvzcbpnmt).
