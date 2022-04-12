@@ -1,12 +1,4 @@
-<p align="center">
-    <img
-        src="https://dr3ngl797z54v.cloudfront.net/FinEvol-logo.gif"
-        alt="FinEvol Logo"
-        width="75%"
-    />
-</p>
-
-# FinEvol: Comparing Scalable Neuroevolution with Deep Reinforcement Learning in Quantitative Finance Applications
+# FinEvo: Comparing Scalable Neuroevolution with Deep Reinforcement Learning in Quantitative Finance Applications
 
 For the current project proposal, see [this document](https://www.overleaf.com/read/pfjjvzcbpnmt).
 
