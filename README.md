@@ -8,9 +8,10 @@ For the current project proposal, see [this document](https://www.overleaf.com/r
 
 - Create a massively parallel neuroevolution architecture that seamlessly integrates with symmetrically parallel simulation environments (time series, Isaac Gym, custom gym-like environments, etc.).
 - Integrate the neuroevolution architecture to train on multiple GPUs.
-- Establish state-of-the-art performance with evolutionary algorithms on parallelized quantitative finance tasks, Isaac Gym tasks, and related gym-like tasks (for example: Bipedal-Walker-Hardcore).
-- Eventually, examine asynchronous updating between networks to prevent idle time among worker nodes.
-- Eventually, examine a decentralized updating architecture to see if any benefits are provided by decentralization over centralization.
+- Establish state-of-the-art performance with evolutionary algorithms on parallelized quantitative finance tasks and related gym-like tasks.
+- Show that our implementation of evolution strategies dramatically reduces hardware cost, as compared to OpenAI's implementation. For instance, in the original OpenAI ES paper, they needed 80 machines each with 18 CPU cores on AWS EC2 ($122.40/hour total for the cheapest machines) to solve Humanoid in ~10 minutes. We can do better with far fewer resources and lower compute costs by taking advantage of our parallelized policy parameters model with Isaac Gym.
+- Examine the adversarial interaction \textit{between} independently trained agents in completely simulated market environments.
+- Consider a decentralized updating architecture to see if any benefits are provided by decentralization over centralization.
 
 ## Useful References
 
