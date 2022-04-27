@@ -2,7 +2,7 @@
 
 # FinEvo: Scalable Neuroevolution for Financial Reinforcement Learning
 
-For the current project proposal, see [this document](https://www.overleaf.com/read/pfjjvzcbpnmt).
+For the current project proposal, see [this document](https://docs.google.com/document/d/11DenLB5lEzhJzPuUMtsYvy56dfAtmA7erlrbALWvqxU).
 
 ## Long-Term Goals
 
