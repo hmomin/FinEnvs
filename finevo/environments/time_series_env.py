@@ -2,6 +2,8 @@ import numpy as np
 import os
 import pandas as pd
 import torch
+
+from ..base_object import BaseObject
 from ..device_utils import set_device
 from glob import glob
 from gym import spaces
@@ -10,7 +12,7 @@ from tqdm import tqdm
 from typing import Tuple
 
 
-class TimeSeriesEnv:
+class TimeSeriesEnv(BaseObject):
     def __init__(
         self,
         instrument_name: str,
@@ -238,6 +240,3 @@ class TimeSeriesEnv:
         self.env_pointers[horizontal_dones] = 0
         self.balances[dones] = self.starting_balance
         self.num_shares[dones] = 0
-
-    def print(self):
-        pprint(vars(self))

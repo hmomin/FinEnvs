@@ -1,6 +1,7 @@
 import csv
 import os
 import torch
+from ..base_object import BaseObject
 from .buffer import Buffer
 from .continuous_actor import ContinuousActor, ContinuousActorLSTM, ContinuousActorMLP
 from .critic import Critic, CriticLSTM, CriticMLP
@@ -10,7 +11,7 @@ from time import time
 from typing import Tuple, Dict
 
 
-class PPOAgent(object):
+class PPOAgent(BaseObject):
     def __init__(
         self,
         env_args: Dict,

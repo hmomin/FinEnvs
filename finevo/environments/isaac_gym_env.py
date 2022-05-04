@@ -1,12 +1,13 @@
 import isaacgym
 import torch
+from ..base_object import BaseObject
 from .isaac_gym_envs.tasks import isaacgym_task_map
 from .isaac_gym_envs.tasks.base.vec_task import VecTask
 from .isaac_gym_envs.utils.config_utils import load_task_config
 from typing import Dict, Tuple
 
 
-class IsaacGymEnv:
+class IsaacGymEnv(BaseObject):
     def __init__(
         self,
         env_name: str,

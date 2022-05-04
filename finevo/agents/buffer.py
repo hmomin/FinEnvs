@@ -1,10 +1,11 @@
 import numpy as np
 import torch
+from ..base_object import BaseObject
 from ..device_utils import set_device
 from typing import Dict
 
 
-class Buffer:
+class Buffer(BaseObject):
     def __init__(
         self, num_mini_batches: int = 16, gamma: float = 0.99, device_id: int = 0
     ):
