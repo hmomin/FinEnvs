@@ -40,6 +40,9 @@ class IsaacGymEnv:
     def override_default_num_envs(self, num_envs: int) -> None:
         if num_envs > 0:
             self.config["env"]["numEnvs"] = num_envs
+            self.num_envs = num_envs
+        else:
+            self.num_envs = self.config["env"]["numEnvs"]
 
     def reset(self) -> torch.Tensor:
         states = self.env.reset()
@@ -47,6 +50,11 @@ class IsaacGymEnv:
             states = states["obs"]
         assert isinstance(states, torch.Tensor)
         return states
+
+    def reset_all(self) -> torch.Tensor:
+        env_indices = torch.arange(0, self.num_envs, device=self.sim_device).long()
+        self.env.reset_idx(env_indices)
+        return self.reset()
 
     def step(
         self, actions: torch.Tensor
