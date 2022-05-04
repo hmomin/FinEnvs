@@ -66,7 +66,7 @@ class PPOAgent(object):
             os.mkdir(trials_dir)
         self.csv_name = os.path.join(
             trials_dir,
-            datetime.now().strftime(f"{self.env_name}_%Y-%m-%d_%H-%M-%S.csv"),
+            datetime.now().strftime(f"{self.env_name}_PPO_%Y-%m-%d_%H-%M-%S.csv"),
         )
         csv_fields = [
             "unix_time",
