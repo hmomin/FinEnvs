@@ -4,13 +4,14 @@ Strategies (NES), where the parameter distribution is a gaussian of fixed standa
 deviation. -> parallelized with PyTorch and uses a full-on hidden layer
 """
 
+import numpy as np
 import torch
 
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
 # hyperparameters
 num_envs = 512
-noise_std_dev = 1.0
+noise_std_dev = 0.02
 learning_rate = 3e-4
 solution = torch.tensor((0.5, 0.1, -0.3), device=device)
 seed = 0
@@ -32,15 +33,16 @@ def black_box_function(actions: torch.Tensor) -> torch.Tensor:
 torch.manual_seed(seed)
 states = torch.randn((24,), device=device)
 duplicated_states = states.repeat(num_envs, 1, 1)
-weights = torch.randn((24, 3), device=device)
-biases = torch.randn((1, 3), device=device)
-activation = torch.nn.Identity()
+weights = torch.normal(0, np.sqrt(2 / 24), (24, 3), device=device)
+biases = torch.normal(0, np.sqrt(2 / 24), (1, 3), device=device)
+activation = torch.nn.Tanh()
 print(f"solution: {str(solution)}")
 
 for i in range(601):
-    if i % 30 == 0:
+    if i % 1 == 0:
         # fitness of current weights
         actions = activation(torch.matmul(states, weights) + biases)
+        # print(actions)
         print(f"iter: {i:4d} | R: {black_box_function(actions).item():0.6f}")
 
     weight_perturbations = torch.randn((num_envs, 24, 3), device=device)
@@ -55,6 +57,8 @@ for i in range(601):
     )
 
     returns = black_box_function(new_actions).unsqueeze(-1)
+    # FIXME: normalize returns
+    # returns = (returns - torch.mean(returns, 0)) / torch.std(returns, 0)
 
     mean_weight_grad = torch.mul(returns, weight_perturbations).mean(0)
     mean_bias_grad = torch.mul(returns, bias_perturbations).mean(0)
