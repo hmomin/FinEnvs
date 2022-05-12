@@ -1,18 +1,20 @@
 """
 A bare bones examples of optimizing a black-box function using Natural Evolution
 Strategies (NES), where the parameter distribution is a gaussian of fixed standard
-deviation. -> parallelized with PyTorch and uses a full-on hidden layer
+deviation. -> parallelized with PyTorch and uses a full-on hidden layer with mirrored
+sampling
 """
 
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
 # hyperparameters
-num_envs = 512
+num_envs = 8192
 noise_std_dev = 0.02
-learning_rate = 3e-4
+learning_rate = 0.01
 solution = torch.tensor((0.5, 0.1, -0.3), device=device)
 seed = 0
 
@@ -29,24 +31,43 @@ def black_box_function(actions: torch.Tensor) -> torch.Tensor:
     return reward
 
 
+def compute_centered_rank(values: torch.Tensor) -> torch.Tensor:
+    ranks = torch.argsort(values, dim=0)
+    N = ranks.shape[0]
+    centered_ranks = ranks / (N - 1) - 0.5
+    return centered_ranks
+
+
 # start the optimization with a random initial guess
 torch.manual_seed(seed)
 states = torch.randn((24,), device=device)
 duplicated_states = states.repeat(num_envs, 1, 1)
+
 weights = torch.normal(0, np.sqrt(2 / 24), (24, 3), device=device)
 biases = torch.normal(0, np.sqrt(2 / 24), (1, 3), device=device)
 activation = torch.nn.Tanh()
+
 print(f"solution: {str(solution)}")
 
-for i in range(601):
+for i in range(31):
     if i % 1 == 0:
         # fitness of current weights
         actions = activation(torch.matmul(states, weights) + biases)
         # print(actions)
         print(f"iter: {i:4d} | R: {black_box_function(actions).item():0.6f}")
 
-    weight_perturbations = torch.randn((num_envs, 24, 3), device=device)
-    bias_perturbations = torch.randn((num_envs, 1, 3), device=device)
+    positive_weight_perturbations = torch.randn((num_envs // 2, 24, 3), device=device)
+    negative_weight_perturbations = -positive_weight_perturbations
+    positive_bias_perturbations = torch.randn((num_envs // 2, 1, 3), device=device)
+    negative_bias_perturbations = -positive_bias_perturbations
+
+    weight_perturbations = torch.cat(
+        [positive_weight_perturbations, negative_weight_perturbations], dim=0
+    )
+    bias_perturbations = torch.cat(
+        [positive_bias_perturbations, negative_bias_perturbations], dim=0
+    )
+
     duplicated_weights = weights.repeat(num_envs, 1, 1)
     duplicated_biases = biases.repeat(num_envs, 1, 1)
     perturbed_weights = duplicated_weights + noise_std_dev * weight_perturbations
@@ -57,10 +78,20 @@ for i in range(601):
     )
 
     returns = black_box_function(new_actions).unsqueeze(-1)
-    # FIXME: normalize returns
-    # returns = (returns - torch.mean(returns, 0)) / torch.std(returns, 0)
 
-    mean_weight_grad = torch.mul(returns, weight_perturbations).mean(0)
-    mean_bias_grad = torch.mul(returns, bias_perturbations).mean(0)
+    (positive_returns, negative_returns) = returns.split(num_envs // 2)
+    new_returns = positive_returns - negative_returns
+
+    # print(new_returns)
+    print(max(new_returns), min(new_returns))
+    new_returns = compute_centered_rank(new_returns)
+    # new_returns = (new_returns - torch.mean(new_returns, 0)) / torch.std(new_returns, 0)
+    # print(new_returns)
+    print(max(new_returns), min(new_returns))
+
+    # raise Exception("STOP")
+
+    mean_weight_grad = torch.mul(new_returns, positive_weight_perturbations).mean(0)
+    mean_bias_grad = torch.mul(new_returns, positive_bias_perturbations).mean(0)
     weights += learning_rate / noise_std_dev * mean_weight_grad
     biases += learning_rate / noise_std_dev * mean_bias_grad

@@ -11,8 +11,8 @@ device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
 # hyperparameters
 num_envs = 512
-noise_std_dev = 1.0
-learning_rate = 3e-4
+noise_std_dev = 0.02
+learning_rate = 0.01
 solution = torch.tensor((0.5, 0.1, -0.3), device=device)
 seed = 0
 
@@ -39,7 +39,7 @@ layers = [
     torch.nn.ELU(),
     torch.normal(0, np.sqrt(2 / 10), (10, 3), device=device),
     torch.normal(0, np.sqrt(2 / 10), (1, 3), device=device),
-    torch.nn.Tanh(),
+    torch.nn.Identity(),
 ]
 perturbed_layers: "list[torch.Tensor]" = []
 
