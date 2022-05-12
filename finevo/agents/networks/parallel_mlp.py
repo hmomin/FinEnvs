@@ -1,10 +1,11 @@
 import numpy as np
 import torch
 import torch.nn as nn
+from ...base_object import BaseObject
 from ...device_utils import set_device
 
 
-class ParallelMLP(object):
+class ParallelMLP(BaseObject):
     def __init__(
         self,
         num_envs: int,
@@ -16,6 +17,9 @@ class ParallelMLP(object):
         device_id: int = 0,
     ):
         self.device = set_device(device_id)
+        assert (
+            num_envs % 2 == 0
+        ), f"num_envs ({num_envs}) must be divisible by 2 for mirror sampling."
         self.num_envs = num_envs
         self.shape = shape
         self.learning_rate = learning_rate
@@ -77,6 +81,9 @@ class ParallelMLP(object):
             bias_perturbation = torch.normal(
                 0, self.noise_std_dev, new_biases.shape, device=self.device
             )
+            # use the first environment for parameter evaluation
+            weight_perturbation[0, :, :] = 0
+            bias_perturbation[0, :, :] = 0
             new_weights.add_(weight_perturbation)
             new_biases.add_(bias_perturbation)
             self.perturbed_weights.append(new_weights)
@@ -100,7 +107,8 @@ class ParallelMLP(object):
             perturbed_bias_layer.sub_(bias_layer.repeat((self.num_envs, 1, 1)))
 
     def update_parameters(self, fitnesses: torch.Tensor):
-        expanded_fitnesses = fitnesses.unsqueeze(1).unsqueeze(1)
+        transformed_fitnesses = self.compute_centered_rank(fitnesses)
+        expanded_fitnesses = transformed_fitnesses.unsqueeze(1).unsqueeze(1)
         for (
             weight_layer,
             perturbed_weight_layer,
@@ -126,3 +134,38 @@ class ParallelMLP(object):
             bias_layer.add_(bias_grad)
         self.perturbed_weights = []
         self.perturbed_biases = []
+
+    def compute_ranks(self, values: torch.Tensor):
+        values_1d = values.squeeze()
+        ranks = torch.empty(values_1d.shape[0], device=self.device)
+        sort_indices = values_1d.argsort()
+        linear_ranks = torch.arange(
+            0, values.shape[0], dtype=torch.float32, device=self.device
+        )
+        ranks[sort_indices] = linear_ranks
+        ranks = ranks.reshape(values.shape)
+        return ranks
+
+    def compute_centered_rank(self, values: torch.Tensor) -> torch.Tensor:
+        ranks = self.compute_ranks(values)
+        N = len(ranks)
+        centered_ranks = ranks / (N - 1) - 0.5
+        return centered_ranks
+
+    # def update_parameters_with_max(self, fitnesses: torch.Tensor) -> None:
+    #     max_index = torch.argmax(fitnesses)
+    #     for (
+    #         weight_layer,
+    #         perturbed_weight_layer,
+    #         bias_layer,
+    #         perturbed_bias_layer,
+    #     ) in zip(
+    #         self.weight_layers,
+    #         self.perturbed_weights,
+    #         self.bias_layers,
+    #         self.perturbed_biases,
+    #     ):
+    #         weight_layer[:] = perturbed_weight_layer[max_index, :, :]
+    #         bias_layer[:] = perturbed_bias_layer[max_index, :, :]
+    #     self.perturbed_weights = []
+    #     self.perturbed_biases = []
