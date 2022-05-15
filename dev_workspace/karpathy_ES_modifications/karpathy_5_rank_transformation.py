@@ -13,7 +13,7 @@ device = "cuda:0" if torch.cuda.is_available() else "cpu"
 # hyperparameters
 num_envs = 8192
 noise_std_dev = 0.02
-learning_rate = 0.0003
+learning_rate = 0.01
 solution = torch.tensor((0.5, 0.1, -0.3), device=device)
 seed = 0
 
