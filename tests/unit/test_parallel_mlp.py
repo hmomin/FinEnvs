@@ -35,11 +35,13 @@ class TestParallelMLPNetworks(unittest.TestCase):
         self.network.update_parameters(self.fitnesses)
 
     def test_5_should_compute_centered_rank(self):
-        values = torch.tensor(range(31, 26, -1), device=self.network.device)
-        centered_ranks = ParallelMLP.compute_centered_rank(values)
+        data = [1, 0, 5, 4, 6, 10, 7, 2, 9, 8, 3]
         true_centered_ranks = torch.tensor(
-            np.arange(0.5, -0.75, -0.25), device=self.network.device
+            [-0.4, -0.5, 0.0, -0.1, +0.1, +0.5, +0.2, -0.3, +0.4, +0.3, -0.2],
+            device=self.network.device,
         )
+        values = torch.tensor(data, device=self.network.device)
+        centered_ranks = self.network.compute_centered_rank(values)
         difference = torch.norm(centered_ranks - true_centered_ranks).item()
         self.assertAlmostEqual(difference, 0)
 
