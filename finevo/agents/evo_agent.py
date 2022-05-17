@@ -13,9 +13,10 @@ class EvoAgent(BaseObject):
     def __init__(
         self,
         env_args: Dict,
+        hidden_dims: Tuple[int] = (128, 128),
         learning_rate: float = 0.01,
         noise_std_dev: float = 0.02,
-        hidden_dims: Tuple[int] = (128, 128),
+        l2_coefficient: float = 0.0,
         write_to_csv: bool = True,
         device_id: int = 0,
     ):
@@ -29,6 +30,7 @@ class EvoAgent(BaseObject):
             self.network_shape,
             learning_rate=learning_rate,
             noise_std_dev=noise_std_dev,
+            l2_coefficient=l2_coefficient,
             device_id=device_id,
         )
         self.network.perturb_parameters()
@@ -84,9 +86,9 @@ class EvoAgent(BaseObject):
         self.dones[new_done_indices] = 1
         return sum(self.dones)
 
-    def log_progress(self) -> None:
+    def log_progress(self) -> float:
         num_episodes = self.returns.shape[0]
-        eval_return = self.returns[0].item()
+        eval_return = self.returns[-1].item()
         max_return = self.returns.max().item()
         mean_return = self.returns.mean().item()
         std_dev_return = self.returns.std().item()
@@ -110,9 +112,11 @@ class EvoAgent(BaseObject):
         )
         self.returns = torch.zeros((self.num_envs,), device=self.device)
         self.dones = torch.zeros((self.num_envs,), device=self.device)
+        return eval_return
 
-    def train(self) -> None:
+    def train(self) -> float:
         self.network.reconstruct_perturbations()
         self.network.update_parameters(self.returns)
-        self.log_progress()
+        eval_return = self.log_progress()
         self.network.perturb_parameters()
+        return eval_return
