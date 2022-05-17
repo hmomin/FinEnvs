@@ -1,4 +1,3 @@
-from logging import exception
 import numpy as np
 import torch
 import torch.nn as nn
@@ -139,16 +138,6 @@ class ParallelMLP(BaseObject):
             self.perturbed_weights.append(new_weights)
             self.perturbed_biases.append(new_biases)
 
-    def get_l2_loss(self):
-        l2_loss = torch.zeros((self.num_envs,), device=self.device)
-        for (weight_layer, bias_layer) in zip(
-            self.perturbed_weights,
-            self.perturbed_biases,
-        ):
-            l2_loss += torch.square(weight_layer).sum(-1).sum(-1)
-            l2_loss += torch.square(bias_layer).sum(-1).sum(-1)
-        return l2_loss
-
     def reconstruct_perturbations(self):
         # transform the perturbed parameters to just the perturbations by subtracting
         # the original parameters
@@ -166,11 +155,9 @@ class ParallelMLP(BaseObject):
             perturbed_weight_layer.sub_(weight_layer.repeat((self.num_envs, 1, 1)))
             perturbed_bias_layer.sub_(bias_layer.repeat((self.num_envs, 1, 1)))
 
-    def update_parameters(self, fitnesses: torch.Tensor, l2_loss: torch.Tensor):
+    def update_parameters(self, fitnesses: torch.Tensor):
         self.adam_timestep += 1
-        transformed_fitnesses = (
-            self.compute_centered_rank(fitnesses) - self.l2_coefficient * l2_loss
-        )
+        transformed_fitnesses = self.compute_centered_rank(fitnesses)
         positive_perturbation_fitnesses = transformed_fitnesses[0 : self.num_envs // 2]
         negative_perturbation_fitnesses = transformed_fitnesses[self.num_envs // 2 : -1]
         diffed_fitnesses = (
@@ -202,6 +189,8 @@ class ParallelMLP(BaseObject):
             total_bias_grad = torch.mul(expanded_fitnesses, positive_bias_perturbations)
             mean_weight_grad = torch.mean(total_weight_grad, 0) / self.noise_std_dev
             mean_bias_grad = torch.mean(total_bias_grad, 0) / self.noise_std_dev
+            mean_weight_grad -= self.l2_coefficient * weight_layer
+            mean_bias_grad -= self.l2_coefficient * bias_layer
             self.adam_update(
                 (weight_layer, bias_layer), (mean_weight_grad, mean_bias_grad), idx
             )
