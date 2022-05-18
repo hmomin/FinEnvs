@@ -11,22 +11,21 @@ torch.manual_seed(42)
 
 
 def train_Evo_MLP_on_environment(env_name: str):
-    num_envs = 32
-    step_limit = 10
-    step_increment = 10
-    increment_threshold = 0.50
+    num_envs = 4096 + 1
+    episodes_per_batch = 10_000
+    timesteps_per_batch = 500_000
 
     env_args = get_isaac_gym_env_args(env_name)
     env_args["num_envs"] = num_envs
-    # num_envs = env_args["num_envs"]
 
-    env = IsaacGymEnv(env_name, num_envs, headless=True)
+    env = IsaacGymEnv(env_name, num_envs, headless=False)
     agent = EvoAgent(
         env_args,
+        hidden_dims=(256, 256),
         learning_rate=0.01,
         noise_std_dev=0.02,
-        hidden_dims=(256, 256),
-        write_to_csv=True,
+        l2_coefficient=0.005,
+        write_to_csv=False,
     )
     states = env.reset()
     steps = 0
@@ -35,13 +34,10 @@ def train_Evo_MLP_on_environment(env_name: str):
         (next_states, rewards, dones, _) = env.step(actions)
         num_done = agent.store(rewards, dones)
         states = next_states
-        steps += 1
-        if num_done == num_envs or steps == step_limit:
+        steps += num_envs
+        if num_done >= episodes_per_batch or steps >= timesteps_per_batch:
             agent.train()
             states = env.reset_all()
-            if num_done / num_envs < increment_threshold:
-                step_limit += step_increment
-                print(f"new step limit: {step_limit}...")
             steps = 0
 
 
