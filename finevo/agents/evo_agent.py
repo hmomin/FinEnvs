@@ -34,12 +34,9 @@ class EvoAgent(BaseObject):
             device_id=device_id,
         )
         self.network.perturb_parameters()
-        self.returns = torch.zeros(
-            (self.num_envs,), device=self.device, requires_grad=False
-        )
-        self.dones = torch.zeros(
-            (self.num_envs,), device=self.device, requires_grad=False
-        )
+        self.current_returns = torch.zeros((self.num_envs,), device=self.device)
+        self.finished_returns = torch.zeros(0, device=self.device)
+        self.dones = torch.zeros(0, dtype=torch.long, device=self.device)
         self.write_to_csv = write_to_csv
         if write_to_csv:
             self.create_progress_log()
@@ -65,6 +62,7 @@ class EvoAgent(BaseObject):
             "max_return",
             "mean_return",
             "std_dev_return",
+            "L2_norm",
         ]
         with open(self.csv_name, "a") as f:
             writer = csv.writer(f)
@@ -79,19 +77,24 @@ class EvoAgent(BaseObject):
         rewards: torch.Tensor,
         dones: torch.Tensor,
     ) -> int:
-        current_done_indices = (self.dones == 1).nonzero()
-        new_done_indices = (dones == 1).nonzero()
-        rewards[current_done_indices] = 0
-        self.returns += rewards
-        self.dones[new_done_indices] = 1
-        return sum(self.dones)
+        self.current_returns += rewards
+        new_done_indices = torch.squeeze(dones.nonzero(), 1)
+        finished_returns = self.current_returns[new_done_indices]
+        self.dones = torch.cat([self.dones, new_done_indices], dim=0)
+        self.finished_returns = torch.cat(
+            [self.finished_returns, finished_returns], dim=0
+        )
+        self.current_returns[new_done_indices] = 0
+        return self.finished_returns.nelement()
 
     def log_progress(self) -> float:
-        num_episodes = self.returns.shape[0]
-        eval_return = self.returns[-1].item()
-        max_return = self.returns.max().item()
-        mean_return = self.returns.mean().item()
-        std_dev_return = self.returns.std().item()
+        self.compute_mean_returns()
+        num_episodes = self.mean_returns.shape[0]
+        eval_return = self.mean_returns[-1].item()
+        max_return = self.mean_returns.max().item()
+        mean_return = self.mean_returns.mean().item()
+        std_dev_return = self.mean_returns.std().item()
+        L2_norm = self.network.get_l2_norm()
         record_fields = [
             time(),
             num_episodes,
@@ -99,6 +102,7 @@ class EvoAgent(BaseObject):
             max_return,
             mean_return,
             std_dev_return,
+            L2_norm,
         ]
         if self.write_to_csv:
             with open(self.csv_name, "a") as f:
@@ -108,15 +112,47 @@ class EvoAgent(BaseObject):
             f"eval return: {eval_return:.6f} | "
             + f"max return: {max_return:.6f} | "
             + f"mean return: {mean_return:.6f} | "
-            + f"std dev return: {std_dev_return:.6f}"
+            + f"std dev return: {std_dev_return:.6f} | "
+            + f"L2 norm: {L2_norm:.6f}"
         )
-        self.returns = torch.zeros((self.num_envs,), device=self.device)
-        self.dones = torch.zeros((self.num_envs,), device=self.device)
+        del self.centered_ranks, self.final_ranks, self.mean_returns
+        self.current_returns = torch.zeros((self.num_envs,), device=self.device)
+        self.finished_returns = torch.zeros(0, device=self.device)
+        self.dones = torch.zeros(0, dtype=torch.long, device=self.device)
         return eval_return
+
+    def compute_mean_returns(self) -> None:
+        done_counts = torch.bincount(self.dones, minlength=self.num_envs)
+        numerator = torch.zeros((self.num_envs,), device=self.device)
+        numerator.index_add_(0, self.dones, self.finished_returns)
+        denominator = done_counts.float()
+        # avoid dividing by zero
+        denominator[done_counts == 0] = 1.0
+        self.mean_returns = numerator / denominator
 
     def train(self) -> float:
         self.network.reconstruct_perturbations()
-        self.network.update_parameters(self.returns)
+        self.perform_rank_transformation()
+        self.network.update_parameters(self.final_ranks)
         eval_return = self.log_progress()
         self.network.perturb_parameters()
+        # self.network.perturb_parameters_2()
         return eval_return
+
+    def perform_rank_transformation(self) -> None:
+        sort_indices = self.finished_returns.argsort()
+        self.compute_centered_ranks(sort_indices)
+        self.compute_final_ranks()
+
+    def compute_centered_ranks(self, sort_indices: torch.Tensor) -> None:
+        ranks = torch.empty(sort_indices.shape, device=self.device)
+        linear_ranks = torch.arange(
+            0, sort_indices.shape[0], dtype=torch.float32, device=self.device
+        )
+        ranks[sort_indices] = linear_ranks
+        N = len(ranks)
+        self.centered_ranks = ranks / (N - 1) - 0.5
+
+    def compute_final_ranks(self) -> None:
+        self.final_ranks = torch.zeros((self.num_envs,), device=self.device)
+        self.final_ranks.index_add_(0, self.dones, self.centered_ranks)
