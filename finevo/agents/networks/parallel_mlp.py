@@ -14,7 +14,7 @@ class ParallelMLP(BaseObject):
         learning_rate: float = 0.01,
         noise_std_dev: float = 0.02,
         l2_coefficient: float = 0.005,
-        layer_activation=nn.ELU,
+        layer_activation=nn.Tanh,
         output_activation=nn.Tanh,
         device_id: int = 0,
     ):
@@ -155,11 +155,28 @@ class ParallelMLP(BaseObject):
             perturbed_weight_layer.sub_(weight_layer.repeat((self.num_envs, 1, 1)))
             perturbed_bias_layer.sub_(bias_layer.repeat((self.num_envs, 1, 1)))
 
+    # # FIXME: come up with a better name for this
+    # def perturb_parameters_2(self):
+    #     # transform the perturbations to the perturbed parameters by adding
+    #     # the original parameters
+    #     for (
+    #         weight_layer,
+    #         perturbed_weight_layer,
+    #         bias_layer,
+    #         perturbed_bias_layer,
+    #     ) in zip(
+    #         self.weight_layers,
+    #         self.perturbed_weights,
+    #         self.bias_layers,
+    #         self.perturbed_biases,
+    #     ):
+    #         perturbed_weight_layer.add_(weight_layer.repeat((self.num_envs, 1, 1)))
+    #         perturbed_bias_layer.add_(bias_layer.repeat((self.num_envs, 1, 1)))
+
     def update_parameters(self, fitnesses: torch.Tensor):
         self.adam_timestep += 1
-        transformed_fitnesses = self.compute_centered_rank(fitnesses)
-        positive_perturbation_fitnesses = transformed_fitnesses[0 : self.num_envs // 2]
-        negative_perturbation_fitnesses = transformed_fitnesses[self.num_envs // 2 : -1]
+        positive_perturbation_fitnesses = fitnesses[0 : self.num_envs // 2]
+        negative_perturbation_fitnesses = fitnesses[self.num_envs // 2 : -1]
         diffed_fitnesses = (
             positive_perturbation_fitnesses - negative_perturbation_fitnesses
         )
@@ -197,22 +214,15 @@ class ParallelMLP(BaseObject):
         self.perturbed_weights = []
         self.perturbed_biases = []
 
-    def compute_ranks(self, values: torch.Tensor):
-        values_1d = values.squeeze()
-        ranks = torch.empty(values_1d.shape[0], device=self.device)
-        sort_indices = values_1d.argsort()
-        linear_ranks = torch.arange(
-            0, values.shape[0], dtype=torch.float32, device=self.device
-        )
-        ranks[sort_indices] = linear_ranks
-        ranks = ranks.reshape(values.shape)
-        return ranks
-
-    def compute_centered_rank(self, values: torch.Tensor) -> torch.Tensor:
-        ranks = self.compute_ranks(values)
-        N = len(ranks)
-        centered_ranks = ranks / (N - 1) - 0.5
-        return centered_ranks
+    def get_l2_norm(self) -> float:
+        l2_norm = 0
+        for (weight_layer, bias_layer,) in zip(
+            self.weight_layers,
+            self.bias_layers,
+        ):
+            l2_norm += weight_layer.square().sum() + bias_layer.square().sum()
+        l2_norm = l2_norm.sqrt().item()
+        return l2_norm
 
     def adam_update(
         self, layers: Tuple[torch.Tensor], grads: Tuple[torch.Tensor], idx: int
