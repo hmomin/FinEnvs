@@ -1,4 +1,3 @@
-import numpy as np
 import torch
 import unittest
 from finevo.agents.networks.parallel_mlp import ParallelMLP
@@ -33,17 +32,6 @@ class TestParallelMLPNetworks(unittest.TestCase):
 
     def test_4_should_update_parameters(self):
         self.network.update_parameters(self.fitnesses)
-
-    def test_5_should_compute_centered_rank(self):
-        data = [1, 0, 5, 4, 6, 10, 7, 2, 9, 8, 3]
-        true_centered_ranks = torch.tensor(
-            [-0.4, -0.5, 0.0, -0.1, +0.1, +0.5, +0.2, -0.3, +0.4, +0.3, -0.2],
-            device=self.network.device,
-        )
-        values = torch.tensor(data, device=self.network.device)
-        centered_ranks = self.network.compute_centered_rank(values)
-        difference = torch.norm(centered_ranks - true_centered_ranks).item()
-        self.assertAlmostEqual(difference, 0)
 
 
 if __name__ == "__main__":
