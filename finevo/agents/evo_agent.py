@@ -35,6 +35,8 @@ class EvoAgent(BaseObject):
         )
         self.network.perturb_parameters()
         self.current_returns = torch.zeros((self.num_envs,), device=self.device)
+        self.current_timesteps = torch.zeros((self.num_envs,), device=self.device)
+        self.total_timesteps = 0
         self.finished_returns = torch.zeros(0, device=self.device)
         self.dones = torch.zeros(0, dtype=torch.long, device=self.device)
         self.write_to_csv = write_to_csv
@@ -64,28 +66,32 @@ class EvoAgent(BaseObject):
             "std_dev_return",
             "L2_norm",
         ]
-        with open(self.csv_name, "a") as f:
-            writer = csv.writer(f)
-            writer.writerow(csv_fields)
+        self.log = open(self.csv_name, "a")
+        self.writer = csv.writer(self.log)
+        self.writer.writerow(csv_fields)
 
     def step(self, states: torch.Tensor) -> torch.Tensor:
         actions = self.network.forward(states)
+        self.current_timesteps += 1
         return actions
 
     def store(
         self,
         rewards: torch.Tensor,
         dones: torch.Tensor,
-    ) -> int:
+    ) -> Tuple[int, int]:
         self.current_returns += rewards
         new_done_indices = torch.squeeze(dones.nonzero(), 1)
         finished_returns = self.current_returns[new_done_indices]
+        finished_timesteps = self.current_timesteps[new_done_indices].sum()
+        self.total_timesteps += finished_timesteps.item()
         self.dones = torch.cat([self.dones, new_done_indices], dim=0)
         self.finished_returns = torch.cat(
             [self.finished_returns, finished_returns], dim=0
         )
         self.current_returns[new_done_indices] = 0
-        return self.finished_returns.nelement()
+        self.current_timesteps[new_done_indices] = 0
+        return (self.finished_returns.nelement(), self.total_timesteps)
 
     def log_progress(self) -> float:
         self.compute_mean_returns()
@@ -105,18 +111,20 @@ class EvoAgent(BaseObject):
             L2_norm,
         ]
         if self.write_to_csv:
-            with open(self.csv_name, "a") as f:
-                writer = csv.writer(f)
-                writer.writerow(record_fields)
+            self.writer.writerow(record_fields)
         print(
-            f"eval return: {eval_return:.6f} | "
-            + f"max return: {max_return:.6f} | "
-            + f"mean return: {mean_return:.6f} | "
-            + f"std dev return: {std_dev_return:.6f} | "
-            + f"L2 norm: {L2_norm:.6f}"
+            f"num eps: {self.finished_returns.nelement()} | "
+            + f"steps: {int(self.total_timesteps)} | "
+            + f"eval ret: {eval_return:.2f} | "
+            + f"max ret: {max_return:.2f} | "
+            + f"mean ret: {mean_return:.2f} | "
+            + f"std dev ret: {std_dev_return:.2f} | "
+            + f"L2 norm: {L2_norm:.2f}"
         )
         del self.centered_ranks, self.final_ranks, self.mean_returns
         self.current_returns = torch.zeros((self.num_envs,), device=self.device)
+        self.current_timesteps = torch.zeros((self.num_envs,), device=self.device)
+        self.total_timesteps = 0
         self.finished_returns = torch.zeros(0, device=self.device)
         self.dones = torch.zeros(0, dtype=torch.long, device=self.device)
         return eval_return
@@ -136,7 +144,6 @@ class EvoAgent(BaseObject):
         self.network.update_parameters(self.final_ranks)
         eval_return = self.log_progress()
         self.network.perturb_parameters()
-        # self.network.perturb_parameters_2()
         return eval_return
 
     def perform_rank_transformation(self) -> None:
