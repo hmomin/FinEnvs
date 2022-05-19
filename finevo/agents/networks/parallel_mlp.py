@@ -155,24 +155,6 @@ class ParallelMLP(BaseObject):
             perturbed_weight_layer.sub_(weight_layer.repeat((self.num_envs, 1, 1)))
             perturbed_bias_layer.sub_(bias_layer.repeat((self.num_envs, 1, 1)))
 
-    # # FIXME: come up with a better name for this
-    # def perturb_parameters_2(self):
-    #     # transform the perturbations to the perturbed parameters by adding
-    #     # the original parameters
-    #     for (
-    #         weight_layer,
-    #         perturbed_weight_layer,
-    #         bias_layer,
-    #         perturbed_bias_layer,
-    #     ) in zip(
-    #         self.weight_layers,
-    #         self.perturbed_weights,
-    #         self.bias_layers,
-    #         self.perturbed_biases,
-    #     ):
-    #         perturbed_weight_layer.add_(weight_layer.repeat((self.num_envs, 1, 1)))
-    #         perturbed_bias_layer.add_(bias_layer.repeat((self.num_envs, 1, 1)))
-
     def update_parameters(self, fitnesses: torch.Tensor):
         self.adam_timestep += 1
         positive_perturbation_fitnesses = fitnesses[0 : self.num_envs // 2]
