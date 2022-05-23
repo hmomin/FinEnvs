@@ -1,3 +1,8 @@
+"""
+SOURCE (arash javanmard in the comments section):
+https://www.inference.vc/evolution-strategies-variational-optimisation-and-natural-es-2/
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import cm
