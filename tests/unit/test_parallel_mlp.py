@@ -7,10 +7,12 @@ class TestParallelMLPNetworks(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         self.num_envs = 8
+        self.num_eval_envs = 2
         self.num_observations = 24
         self.num_actions = 3
         self.network = ParallelMLP(
             self.num_envs,
+            self.num_eval_envs,
             (self.num_observations, 5, 4, self.num_actions),
             noise_std_dev=0.02,
         )
