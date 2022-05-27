@@ -11,6 +11,7 @@ class TestTimeSeriesEnv(unittest.TestCase):
         self.envs = [
             TimeSeriesEnv("IBM", self.num_envs, testing_code=True),
             TimeSeriesEnv("OIH", self.num_envs, testing_code=True),
+            TimeSeriesEnv("SPY", self.num_envs, testing_code=True),
         ]
 
     def test_should_reset_envs(self):
