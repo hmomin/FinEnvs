@@ -459,7 +459,7 @@ def compute_humanoid_reward(
     up_reward = torch.zeros_like(heading_reward)
     up_reward = torch.where(obs_buf[:, 10] > 0.93, up_reward + up_weight, up_reward)
 
-    actions_cost = torch.sum(actions**2, dim=-1)
+    actions_cost = torch.sum(actions ** 2, dim=-1)
 
     # energy cost reward
     motor_effort_ratio = motor_efforts / max_motor_effort

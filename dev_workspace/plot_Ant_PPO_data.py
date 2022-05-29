@@ -36,9 +36,7 @@ def plot_data_for_seconds(filenames: "list[str]") -> None:
         linewidth=0.1,
     )
     plt.plot(
-        minutes,
-        avg_evaluation,
-        "k-",
+        minutes, avg_evaluation, "k-",
     )
     plt.fill_between(minutes, low_evaluation, high_evaluation, color="turquoise")
     plt.xlim(xmin=0.0)
@@ -136,9 +134,7 @@ def plot_data_for_samples(filenames: "list[str]") -> None:
         linewidth=0.1,
     )
     plt.plot(
-        samples,
-        avg_evaluation,
-        "k-",
+        samples, avg_evaluation, "k-",
     )
     plt.fill_between(samples, low_evaluation, high_evaluation, color="turquoise")
     plt.xlim(xmin=0.0)

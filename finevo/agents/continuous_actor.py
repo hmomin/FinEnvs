@@ -107,8 +107,6 @@ class ContinuousActorLSTM(LSTMNetwork, ContinuousActor):
         device_id: int = 0,
     ):
         super().__init__(
-            shape=shape,
-            output_activation=output_activation,
-            device_id=device_id,
+            shape=shape, output_activation=output_activation, device_id=device_id,
         )
         self.set_up_parameters(shape, learning_rate, starting_std_dev, clip_epsilon)

@@ -454,7 +454,7 @@ def compute_ant_reward(
     up_reward = torch.where(obs_buf[:, 10] > 0.93, up_reward + up_weight, up_reward)
 
     # energy penalty for movement
-    actions_cost = torch.sum(actions**2, dim=-1)
+    actions_cost = torch.sum(actions ** 2, dim=-1)
     electricity_cost = torch.sum(torch.abs(actions * obs_buf[:, 20:28]), dim=-1)
     dof_at_limit_cost = torch.sum(obs_buf[:, 12:20] > 0.99, dim=-1)
 

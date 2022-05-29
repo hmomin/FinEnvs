@@ -5,10 +5,7 @@ from .generic_network import GenericNetwork
 
 class LSTMNetwork(GenericNetwork):
     def __init__(
-        self,
-        shape: tuple,
-        output_activation=nn.Identity,
-        device_id: int = 0,
+        self, shape: tuple, output_activation=nn.Identity, device_id: int = 0,
     ):
         super().__init__(device_id=device_id)
         self.create_layers(shape, output_activation)

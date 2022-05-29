@@ -183,11 +183,9 @@ class ParallelMLP(BaseObject):
             positive_perturbation_fitnesses - negative_perturbation_fitnesses
         )
         expanded_fitnesses = diffed_fitnesses.unsqueeze(1).unsqueeze(1)
-        for idx, (
-            weight_layer,
-            perturbed_weight_layer,
-            bias_layer,
-            perturbed_bias_layer,
+        for (
+            idx,
+            (weight_layer, perturbed_weight_layer, bias_layer, perturbed_bias_layer,),
         ) in enumerate(
             zip(
                 self.weight_layers,
@@ -219,10 +217,7 @@ class ParallelMLP(BaseObject):
     @torch.jit.export
     def get_l2_norm(self) -> float:
         l2_norm = 0
-        for (weight_layer, bias_layer,) in zip(
-            self.weight_layers,
-            self.bias_layers,
-        ):
+        for (weight_layer, bias_layer,) in zip(self.weight_layers, self.bias_layers,):
             l2_norm += weight_layer.square().sum() + bias_layer.square().sum()
         l2_norm = l2_norm.sqrt().item()
         return l2_norm
@@ -259,14 +254,14 @@ class ParallelMLP(BaseObject):
         self.second_moment_biases[idx] = beta_2 * self.second_moment_biases[idx] + (
             1 - beta_2
         ) * torch.square(mean_bias_grad)
-        alpha_t = np.sqrt(1 - beta_2**t) / (1 - beta_1**t) * alpha
+        alpha_t = np.sqrt(1 - beta_2 ** t) / (1 - beta_1 ** t) * alpha
         weight_grad = alpha_t * torch.div(
             self.first_moment_weights[idx],
-            torch.sqrt(self.second_moment_weights[idx]) + 10**-8,
+            torch.sqrt(self.second_moment_weights[idx]) + 10 ** -8,
         )
         bias_grad = alpha_t * torch.div(
             self.first_moment_biases[idx],
-            torch.sqrt(self.second_moment_biases[idx]) + 10**-8,
+            torch.sqrt(self.second_moment_biases[idx]) + 10 ** -8,
         )
         weight_layer.add_(weight_grad)
         bias_layer.add_(bias_grad)
