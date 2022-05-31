@@ -908,7 +908,7 @@ def compute_franka_reward(
 
     # distance from hand to the drawer
     d = torch.norm(franka_grasp_pos - drawer_grasp_pos, p=2, dim=-1)
-    dist_reward = 1.0 / (1.0 + d ** 2)
+    dist_reward = 1.0 / (1.0 + d**2)
     dist_reward *= dist_reward
     dist_reward = torch.where(d <= 0.02, dist_reward * 2, dist_reward)
 
@@ -928,7 +928,7 @@ def compute_franka_reward(
         .squeeze(-1)
     )  # alignment of up axis for gripper
     # reward for matching the orientation of the hand to the drawer (fingers wrapped)
-    rot_reward = 0.5 * (torch.sign(dot1) * dot1 ** 2 + torch.sign(dot2) * dot2 ** 2)
+    rot_reward = 0.5 * (torch.sign(dot1) * dot1**2 + torch.sign(dot2) * dot2**2)
 
     # bonus if left finger is above the drawer handle and right below
     around_handle_reward = torch.zeros_like(rot_reward)
@@ -956,7 +956,7 @@ def compute_franka_reward(
     )
 
     # regularization on the actions (summed for each environment)
-    action_penalty = torch.sum(actions ** 2, dim=-1)
+    action_penalty = torch.sum(actions**2, dim=-1)
 
     # how far the cabinet has been opened out
     open_reward = (

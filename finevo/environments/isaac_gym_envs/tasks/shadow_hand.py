@@ -818,7 +818,9 @@ class ShadowHand(VecTask):
                 + num_ft_states : fingertip_obs_start
                 + num_ft_states
                 + num_ft_force_torques,
-            ] = (self.force_torque_obs_scale * self.vec_sensor_tensor)
+            ] = (
+                self.force_torque_obs_scale * self.vec_sensor_tensor
+            )
 
             # obs_end = 96 + 65 + 30 = 191
             # obs_total = obs_end + num_actions = 211
@@ -864,7 +866,9 @@ class ShadowHand(VecTask):
                 + num_ft_states : fingertip_obs_start
                 + num_ft_states
                 + num_ft_force_torques,
-            ] = (self.force_torque_obs_scale * self.vec_sensor_tensor)
+            ] = (
+                self.force_torque_obs_scale * self.vec_sensor_tensor
+            )
 
             # obs_end = 96 + 65 + 30 = 191
             # obs_total = obs_end + num_actions = 211
@@ -1273,7 +1277,7 @@ def compute_hand_reward(
     dist_rew = goal_dist * dist_reward_scale
     rot_rew = 1.0 / (torch.abs(rot_dist) + rot_eps) * rot_reward_scale
 
-    action_penalty = torch.sum(actions ** 2, dim=-1)
+    action_penalty = torch.sum(actions**2, dim=-1)
 
     # Total reward is: position distance + orientation alignment + action regularization + success bonus + fall penalty
     reward = dist_rew + rot_rew + action_penalty * action_penalty_scale

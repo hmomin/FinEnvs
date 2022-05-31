@@ -9,7 +9,7 @@ torch.manual_seed(42)
 
 
 def step_isaac_gym_environment(env_name: str):
-    num_envs = 2 ** 14
+    num_envs = 2**14
     env_args = get_isaac_gym_env_args(env_name)
     env_args["num_envs"] = num_envs
     actions = torch.randn(

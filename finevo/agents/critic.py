@@ -59,6 +59,8 @@ class CriticLSTM(LSTMNetwork, Critic):
         device_id: int = 0,
     ):
         super().__init__(
-            shape=shape, output_activation=output_activation, device_id=device_id,
+            shape=shape,
+            output_activation=output_activation,
+            device_id=device_id,
         )
         self.create_optimizer(learning_rate)

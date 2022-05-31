@@ -93,7 +93,11 @@ class EvoAgent(BaseObject):
         return actions
 
     @torch.jit.export
-    def store(self, rewards: torch.Tensor, dones: torch.Tensor,) -> Tuple[int, int]:
+    def store(
+        self,
+        rewards: torch.Tensor,
+        dones: torch.Tensor,
+    ) -> Tuple[int, int]:
         self.current_returns += rewards
         new_done_indices = torch.squeeze(dones.nonzero(), 1)
         finished_returns = self.current_returns[new_done_indices]

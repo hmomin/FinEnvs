@@ -2,9 +2,7 @@ import isaacgym
 import torch
 from finevo.agents.evo_agent import EvoAgent
 from finevo.environments.isaac_gym_env import IsaacGymEnv
-from finevo.environments.isaac_gym_envs.utils.config_utils import (
-    get_isaac_gym_env_args,
-)
+from finevo.environments.isaac_gym_envs.utils.config_utils import get_isaac_gym_env_args
 
 torch.manual_seed(0)
 
@@ -18,14 +16,14 @@ def train_Evo_MLP_on_environment(env_name: str):
     env_args["num_envs"] = num_envs
     env_args["num_eval_envs"] = num_eval_envs
 
-    env = IsaacGymEnv(env_name, num_envs, headless=True)
+    env = IsaacGymEnv(env_name, num_envs, headless=False)
     agent = EvoAgent(
         env_args,
         hidden_dims=(256, 256),
         learning_rate=0.01,
         noise_std_dev=0.02,
         l2_coefficient=0.005,
-        write_to_csv=True,
+        write_to_csv=False,
     )
     states = env.reset()
     while True:

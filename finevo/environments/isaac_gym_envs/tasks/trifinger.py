@@ -268,7 +268,8 @@ class Trifinger(VecTask):
             high=np.array([0.4, 0.4, 0.5], dtype=np.float32),
         ),
         "fingertip_orientation": SimpleNamespace(
-            low=-np.ones(4, dtype=np.float32), high=np.ones(4, dtype=np.float32),
+            low=-np.ones(4, dtype=np.float32),
+            high=np.ones(4, dtype=np.float32),
         ),
         "fingertip_velocity": SimpleNamespace(
             low=np.full(_dims.VelocityDim.value, -0.2, dtype=np.float32),
@@ -1003,7 +1004,8 @@ class Trifinger(VecTask):
             "object_initial_state"
         ]
         self._sample_object_poses(
-            env_ids, distribution=object_initial_state_config["type"],
+            env_ids,
+            distribution=object_initial_state_config["type"],
         )
         # -- Sampling of goal pose of the object
         self._sample_object_goal_poses(
@@ -1069,7 +1071,10 @@ class Trifinger(VecTask):
             dof_state_noise = (
                 2
                 * torch.rand(
-                    (num_samples, dof_state_dim,),
+                    (
+                        num_samples,
+                        dof_state_dim,
+                    ),
                     dtype=torch.float,
                     device=self.device,
                 )
@@ -1774,7 +1779,14 @@ def random_z(
 @torch.jit.script
 def default_orientation(num: int, device: str) -> torch.Tensor:
     """Returns identity rotation transform."""
-    quat = torch.zeros((num, 4,), dtype=torch.float, device=device,)
+    quat = torch.zeros(
+        (
+            num,
+            4,
+        ),
+        dtype=torch.float,
+        device=device,
+    )
     quat[..., -1] = 1.0
 
     return quat
@@ -1786,7 +1798,14 @@ def random_orientation(num: int, device: str) -> torch.Tensor:
     Ref: https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.transform.Rotation.random.html
     """
     # sample random orientation from normal distribution
-    quat = torch.randn((num, 4,), dtype=torch.float, device=device,)
+    quat = torch.randn(
+        (
+            num,
+            4,
+        ),
+        dtype=torch.float,
+        device=device,
+    )
     # normalize the quaternion
     quat = torch.nn.functional.normalize(quat, p=2.0, dim=-1, eps=1e-12)
 
@@ -1800,7 +1819,14 @@ def random_orientation_within_angle(
     """Generates random quaternions within max_angle of base
     Ref: https://math.stackexchange.com/a/3448434
     """
-    quat = torch.zeros((num, 4,), dtype=torch.float, device=device,)
+    quat = torch.zeros(
+        (
+            num,
+            4,
+        ),
+        dtype=torch.float,
+        device=device,
+    )
 
     rand = torch.rand((num, 3), dtype=torch.float, device=device)
 
@@ -1826,9 +1852,23 @@ def random_orientation_within_angle(
 def random_angular_vel(num: int, device: str, magnitude_stdev: float) -> torch.Tensor:
     """Samples a random angular velocity with standard deviation `magnitude_stdev`"""
 
-    axis = torch.randn((num, 3,), dtype=torch.float, device=device,)
+    axis = torch.randn(
+        (
+            num,
+            3,
+        ),
+        dtype=torch.float,
+        device=device,
+    )
     axis /= torch.norm(axis, p=2, dim=-1).view(-1, 1)
-    magnitude = torch.randn((num, 1,), dtype=torch.float, device=device,)
+    magnitude = torch.randn(
+        (
+            num,
+            1,
+        ),
+        dtype=torch.float,
+        device=device,
+    )
     magnitude *= magnitude_stdev
     return magnitude * axis
 
