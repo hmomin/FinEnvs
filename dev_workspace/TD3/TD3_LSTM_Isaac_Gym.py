@@ -1,14 +1,13 @@
-import isaacgym 
+import isaacgym
 from TD3_agent import TD3AgentLSTM
 from finevo.environments.isaac_gym_env import IsaacGymEnv
-from finevo.environments.isaac_gym_envs.utils.config_utils import (
-    get_isaac_gym_env_args
-)
+from finevo.environments.isaac_gym_envs.utils.config_utils import get_isaac_gym_env_args
 
-def train_TD3_LSTM_on_environiment(env_name:str):
+
+def train_TD3_LSTM_on_environiment(env_name: str):
     env_args = get_isaac_gym_env_args(env_name)
     num_envs = env_args["num_envs"]
-    batch_size = num_envs*16
+    batch_size = num_envs * 16
     max_samples = 100_000_000
 
     env = IsaacGymEnv(env_name, num_envs, headless=True)
@@ -16,16 +15,29 @@ def train_TD3_LSTM_on_environiment(env_name:str):
     states = env.reset()
     total_samples = 0
     while total_samples < max_samples:
-        (actions,  state_action_values_1, state_action_values_2) = agent.step(states)
-        (next_states,rewards,dones,_) = env.step(actions)
-        (target_actions,state_action_values_target_1,state_action_values_target_2) = \
-            agent.target_networks_step(next_states)
-        agent.store(states,actions,rewards,dones,next_states,target_actions,
-            state_action_values_1,state_action_values_2,state_action_values_target_1,
-            state_action_values_target_2)
+        (actions, state_action_values_1, state_action_values_2) = agent.step(states)
+        (next_states, rewards, dones, _) = env.step(actions)
+        (
+            target_actions,
+            state_action_values_target_1,
+            state_action_values_target_2,
+        ) = agent.target_networks_step(next_states)
+        agent.store(
+            states,
+            actions,
+            rewards,
+            dones,
+            next_states,
+            target_actions,
+            state_action_values_1,
+            state_action_values_2,
+            state_action_values_target_1,
+            state_action_values_target_2,
+        )
         states = next_states
-        if agent.get_buffer_size() >=batch_size:
+        if agent.get_buffer_size() >= batch_size:
             total_samples = agent.train(states)
-        
+
+
 if __name__ == "__main__":
     train_TD3_LSTM_on_environiment("Cartpole")
