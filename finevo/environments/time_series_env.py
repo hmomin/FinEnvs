@@ -131,10 +131,8 @@ class TimeSeriesEnv(BaseObject):
         return log_return_tensor
 
     def set_spaces(self) -> None:
-        # observation dimension consists of:
-        # {price data + balance + current number of shares}
-        self.num_price_values = self.num_intervals * self.values_per_interval
-        self.num_obs = self.num_price_values + 2
+        # observation dimension consists solely of price data
+        self.num_obs = self.num_intervals * self.values_per_interval
         # use a continuous action space and discretize based on max_shares
         self.num_acts = 1
         self.action_space = spaces.Box(
@@ -155,23 +153,25 @@ class TimeSeriesEnv(BaseObject):
         self.env_pointers = torch.zeros(
             (self.num_envs,), dtype=torch.int64, device=self.device
         )
-        self.balances = (
-            torch.ones((self.num_envs, 1), device=self.device) * self.starting_balance
+        self.cash = self.starting_balance * torch.ones(
+            (self.num_envs, 1), device=self.device
         )
-        self.num_shares = torch.zeros((self.num_envs, 1), device=self.device)
+        self.long_shares = torch.zeros((self.num_envs, 1), device=self.device)
+        self.short_shares = torch.zeros((self.num_envs, 1), device=self.device)
+        self.margin = torch.zeros((self.num_envs, 1), device=self.device)
 
     def step(
         self, actions: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict]:
-        # FIXME: implement short dynamics somewhere here
         share_changes = self.get_share_changes_from_actions(actions)
         self.env_pointers += self.values_per_interval
         new_states = self.determine_new_states(share_changes)
         rewards = self.determine_immediate_rewards()
         dones = self.find_finished_environments()
-        # If any environments have ended, all shares should be sold in preparation for
-        # the next environment.
-        rewards -= dones * self.num_shares * self.per_share_commission
+        # If any environments have ended, all positions should be closed in preparation
+        # for the next environment.
+        num_shares = self.short_shares + self.long_shares
+        rewards -= dones * num_shares * self.per_share_commission
         self.reset_finished_environments(dones)
         return (new_states, rewards, dones, {})
 
@@ -182,24 +182,22 @@ class TimeSeriesEnv(BaseObject):
         return clamped_share_changes
 
     def determine_new_states(self, share_changes: torch.Tensor) -> torch.Tensor:
+        self.commissions = torch.zeros((self.num_envs, 1), device=self.device)
         self.set_current_prices()
-        current_open_prices = torch.select(self.current_prices, 1, 0).view(
-            self.num_envs, 1
-        )
-        self.ensure_legal_share_changes(share_changes, current_open_prices)
-        self.true_share_changes = (
-            torch.relu(self.num_shares + share_changes) - self.num_shares
-        )
-        capital_required = self.true_share_changes * current_open_prices
-        # FIXME: can actually use different variables for this like
-        # self.cash
-        # self.short_position
-        # self.long_position
-        # self.balance
-        # self.num_shares
-        # ...
-        self.balances -= capital_required
-        self.num_shares += self.true_share_changes
+        (
+            positive_share_changes,
+            negative_share_changes,
+        ) = self.split_share_changes_by_sign(share_changes)
+        # NOTE: the order here is important, because you want to ensure you've closed
+        # all of your long position before entering a short position and vice-versa. In
+        # other words, it shouldn't be possible to have both a long and a short
+        # position at the same time.
+        self.sell_long_positions(negative_share_changes)
+        self.buy_back_short_positions(positive_share_changes)
+        self.disallow_illegal_long_trades(positive_share_changes)
+        self.initiate_long_trades(positive_share_changes)
+        self.disallow_illegal_short_trades(negative_share_changes)
+        self.initiate_short_trades(negative_share_changes)
         return self.reset()
 
     def set_current_prices(self) -> None:
@@ -211,23 +209,158 @@ class TimeSeriesEnv(BaseObject):
             )
             current_prices.append(current_price_data)
         self.current_prices = torch.stack(current_prices, dim=0)
-
-    def ensure_legal_share_changes(
-        self, share_changes: torch.Tensor, current_open_prices: torch.Tensor
-    ) -> None:
-        self.print()
-        raise Exception("STOP")
-        not_enough_capital_mask = (
-            torch.relu(share_changes) * current_open_prices > self.balances
+        self.current_open_prices = torch.select(self.current_prices, 1, 0).view(
+            self.num_envs, 1
         )
-        share_changes[not_enough_capital_mask] = 0
+        self.current_high_prices = torch.select(self.current_prices, 1, 1).view(
+            self.num_envs, 1
+        )
+        self.current_low_prices = torch.select(self.current_prices, 1, 2).view(
+            self.num_envs, 1
+        )
+        self.current_close_prices = torch.select(self.current_prices, 1, 3).view(
+            self.num_envs, 1
+        )
+
+    def split_share_changes_by_sign(
+        self, share_changes: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        positive_share_changes = share_changes.clone()
+        positive_share_changes[share_changes < 0] = 0
+        negative_share_changes = share_changes.clone()
+        negative_share_changes[share_changes > 0] = 0
+        return (positive_share_changes, negative_share_changes)
+
+    def sell_long_positions(self, negative_share_changes: torch.Tensor) -> None:
+        new_long_shares = torch.relu(self.long_shares + negative_share_changes)
+        sell_long_shares = self.long_shares - new_long_shares
+        negative_share_changes += sell_long_shares
+        self.increment_commissions(sell_long_shares)
+        self.cash += sell_long_shares * (
+            self.current_open_prices - self.per_share_commission
+        )
+        self.long_shares = new_long_shares
+
+    def increment_commissions(self, num_shares: torch.Tensor) -> None:
+        commissions = num_shares * self.per_share_commission
+        self.commissions += commissions
+
+    def buy_back_short_positions(self, positive_share_changes: torch.Tensor) -> None:
+        new_short_shares = torch.relu(self.short_shares - positive_share_changes)
+        buy_back_shares = self.short_shares - new_short_shares
+        positive_share_changes -= buy_back_shares
+        self.increment_commissions(buy_back_shares)
+        self.cash -= buy_back_shares * (
+            self.current_open_prices - self.per_share_commission
+        )
+        self.short_shares = new_short_shares
+        new_margin = (
+            self.initial_margin_requirement
+            * self.short_shares
+            * self.current_open_prices
+        )
+        change_in_margin = new_margin - self.margin
+        self.cash -= change_in_margin
+        self.margin = new_margin
+
+    def disallow_illegal_long_trades(
+        self, positive_share_changes: torch.Tensor
+    ) -> None:
+        new_long_positions = positive_share_changes * (
+            self.current_open_prices + self.per_share_commission
+        )
+        new_cash = self.cash - new_long_positions
+        positive_share_changes[new_cash < 0] = 0
+
+    def initiate_long_trades(self, positive_share_changes: torch.Tensor) -> None:
+        self.increment_commissions(positive_share_changes)
+        self.cash -= positive_share_changes * (
+            self.current_open_prices + self.per_share_commission
+        )
+        self.long_shares += positive_share_changes
+
+    def disallow_illegal_short_trades(
+        self, negative_share_changes: torch.Tensor
+    ) -> None:
+        short_commission = -negative_share_changes * self.per_share_commission
+        new_short_positions = -negative_share_changes * self.current_open_prices
+        initial_margin_requirement = (
+            self.initial_margin_requirement * new_short_positions
+        )
+        new_cash = self.cash - initial_margin_requirement - short_commission
+        negative_share_changes[new_cash < 0] = 0
+
+    def initiate_short_trades(self, negative_share_changes: torch.Tensor) -> None:
+        self.increment_commissions(-negative_share_changes)
+        short_commission = -negative_share_changes * self.per_share_commission
+        new_short_positions = -negative_share_changes * self.current_open_prices
+        initial_margin_requirement = (
+            self.initial_margin_requirement * new_short_positions
+        )
+        self.cash -= initial_margin_requirement + short_commission
+        self.margin += initial_margin_requirement
+        self.short_shares += -negative_share_changes
+
+    def force_legal_share_changes(self, share_changes: torch.Tensor) -> None:
+        positive_share_changes = share_changes.clone()
+        positive_share_changes[share_changes < 0] = 0
+        negative_share_changes = share_changes.clone()
+        negative_share_changes[share_changes > 0] = 0
+        # account for selling longs
+        new_long_shares = torch.relu(self.long_shares + negative_share_changes)
+        sell_long_shares = self.long_shares - new_long_shares
+        negative_share_changes += sell_long_shares
+        self.cash += sell_long_shares * (
+            self.current_open_prices - self.per_share_commission
+        )
+        self.long_shares = new_long_shares
+        # account for buying back shorts
+        new_short_shares = torch.relu(self.short_shares - positive_share_changes)
+        buy_back_shares = self.short_shares - new_short_shares
+        positive_share_changes -= buy_back_shares
+        self.cash -= buy_back_shares * (
+            self.current_open_prices - self.per_share_commission
+        )
+        self.short_shares = new_short_shares
+        new_margin = (
+            self.initial_margin_requirement
+            * self.short_shares
+            * self.current_open_prices
+        )
+        change_in_margin = new_margin - self.margin
+        self.cash -= change_in_margin
+        self.margin = new_margin
+        # account for buying new longs
+        new_long_positions = positive_share_changes * (
+            self.current_open_prices + self.per_share_commission
+        )
+        new_cash = self.cash - new_long_positions
+        # disallow long trades with insufficient capital
+        positive_share_changes[new_cash < 0] = 0
+        self.cash -= positive_share_changes * (
+            self.current_open_prices + self.per_share_commission
+        )
+        self.long_shares += positive_share_changes
+        # account for selling new shorts
+        short_commission = -negative_share_changes * self.per_share_commission
+        new_short_positions = -negative_share_changes * self.current_open_prices
+        initial_margin_requirement = (
+            self.initial_margin_requirement * new_short_positions
+        )
+        new_cash = self.cash - initial_margin_requirement - short_commission
+        # disallow short trades with insufficient margin capital
+        negative_share_changes[new_cash < 0] = 0
+        short_commission = -negative_share_changes * self.per_share_commission
+        new_short_positions = -negative_share_changes * self.current_open_prices
+        initial_margin_requirement = (
+            self.initial_margin_requirement * new_short_positions
+        )
+        self.cash -= initial_margin_requirement + short_commission
+        self.margin += initial_margin_requirement
+        self.short_shares += -negative_share_changes
 
     def reset(self) -> torch.Tensor:
-        data_observation_tensors = self.get_price_data_observations()
-        observation_tensors = torch.cat(
-            [data_observation_tensors, self.balances, self.num_shares], dim=1
-        )
-        return observation_tensors
+        return self.get_price_data_observations()
 
     def get_price_data_observations(self) -> torch.Tensor:
         data_observations: "list[torch.Tensor]" = []
@@ -236,36 +369,45 @@ class TimeSeriesEnv(BaseObject):
             # NOTE: for optimization, it's actually possible to parallelize this with
             # the overloaded torch.narrow() function. It will require keeping
             # environments in a single tensor somehow...
-            data_observation = torch.narrow(
-                prices, 0, env_ptr.item(), self.num_price_values
-            )
+            data_observation = torch.narrow(prices, 0, env_ptr.item(), self.num_obs)
             data_observations.append(data_observation)
         data_observation_tensors = torch.stack(data_observations, dim=0)
         return data_observation_tensors
 
     def determine_immediate_rewards(self) -> torch.Tensor:
-        current_open_prices = torch.select(self.current_prices, 1, 0).view(
-            self.num_envs, 1
-        )
-        current_close_prices = torch.select(self.current_prices, 1, 3).view(
-            self.num_envs, 1
-        )
-        price_change = current_close_prices - current_open_prices
+        # FIXME: implement a maintenance margin check if the price goes too high
+        # (> 130% maintenance margin requirement)
+
+        # FIXME: implement a margin release, if the price goes too low
+        # (<150% initial margin requirement)
+
+        # FIXME: implement a final maintenance margin check if the close price is too high
+        # (> 130% maintenance margin requirement)
+        
+        # FIXME: long shares times a positive change in price is a reward
+
+        # FIXME: short shares times a negative changes in price is a reward
+
+        price_change = self.current_close_prices - self.current_open_prices
         balances_change = self.num_shares * price_change
         total_commision = torch.abs(self.true_share_changes) * self.per_share_commission
         return balances_change - total_commision
 
     def find_finished_environments(self) -> torch.Tensor:
+        # FIXME: any environment in which the cash goes negative should terminate
+        # dones = self.cash < 0 ?
         dones = torch.zeros(self.num_envs, 1, dtype=torch.bool, device=self.device)
         for idx, (env_idx, env_ptr) in enumerate(
             zip(self.env_indices, self.env_pointers)
         ):
             env = self.environments[env_idx]
-            if env_ptr.item() + self.num_price_values >= env.shape[0]:
+            if env_ptr.item() + self.num_obs >= env.shape[0]:
                 dones[idx] = True
         return dones
 
     def reset_finished_environments(self, dones: torch.Tensor) -> None:
+        # FIXME: this needs a lot of reworking... use self.print() to diagnose what
+        # needs resetting
         horizontal_dones = dones.view(4)
         self.env_indices[horizontal_dones] = np.random.randint(
             0, len(self.environments)
