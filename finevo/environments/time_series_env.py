@@ -34,6 +34,7 @@ class TimeSeriesEnv(BaseObject):
         self.per_share_commission = per_share_commission
         self.initial_margin_requirement = initial_margin_requirement
         self.maintenance_margin_requirement = maintenance_margin_requirement
+        self.log_return_scale_factor = 100
         self.data_dir_name = self.get_data_dir_name(instrument_name)
         file_key = "dummy" if testing_code else "train"
         self.training_filename = self.find_file_by_key(file_key)
@@ -70,29 +71,30 @@ class TimeSeriesEnv(BaseObject):
         self.set_up_environments()
 
     def read_data(self, path: str) -> None:
-        print(f"Reading data for {self.instrument_name}...")
-        self.df: pd.DataFrame = pd.read_csv(
+        self.training_dataframe: pd.DataFrame = pd.read_csv(
             path,
             names=["Date", "Time", "Open", "High", "Low", "Close", "Volume"],
         )
-        self.df["Datetime"] = pd.to_datetime(self.df["Date"] + " " + self.df["Time"])
-        self.df = self.df.set_index("Datetime")
+        self.training_dataframe["Datetime"] = pd.to_datetime(
+            self.training_dataframe["Date"] + " " + self.training_dataframe["Time"]
+        )
+        self.training_dataframe = self.training_dataframe.set_index("Datetime")
 
     def force_market_hours(self) -> None:
-        self.df = self.df.between_time("9:30", "15:59")
+        self.training_dataframe = self.training_dataframe.between_time("9:30", "15:59")
 
     def set_up_environments(self) -> None:
-        print(f"Setting up environments for {self.instrument_name}...")
+        print(f"Setting up environments...")
         self.environments: "list[torch.Tensor]" = []
         self.prices_by_environment: "list[torch.Tensor]" = []
-        unique_dates = self.df["Date"].unique()
+        unique_dates = self.training_dataframe["Date"].unique()
         num_dates = len(unique_dates)
         # use tqdm to track progress in setting up environments
         for _, date in zip(tqdm(range(num_dates)), unique_dates):
             (start_index, stop_index) = self.get_bounding_indices(date)
             if start_index < 0:
                 continue
-            blocked_df = self.df[start_index:stop_index]
+            blocked_df = self.training_dataframe[start_index:stop_index]
             single_env = blocked_df.drop(["Date", "Time", "Volume"], axis=1)
             (log_return_tensor, price_tensor) = self.get_tensors_from_dataframe(
                 single_env
@@ -101,9 +103,13 @@ class TimeSeriesEnv(BaseObject):
             self.prices_by_environment.append(price_tensor)
 
     def get_bounding_indices(self, date: str) -> Tuple[int, int]:
-        date_indices = self.df["Date"] == date
-        start_index = self.df.index.get_loc(self.df.index[date_indices][0])
-        last_index = self.df.index.get_loc(self.df.index[date_indices][-1])
+        date_indices = self.training_dataframe["Date"] == date
+        start_index = self.training_dataframe.index.get_loc(
+            self.training_dataframe.index[date_indices][0]
+        )
+        last_index = self.training_dataframe.index.get_loc(
+            self.training_dataframe.index[date_indices][-1]
+        )
         # need to backtrack by however many intervals we would like to see on each
         # step through the environment
         true_start_index = start_index - self.num_intervals
@@ -126,9 +132,15 @@ class TimeSeriesEnv(BaseObject):
         previous_closes = OHLC_tensor[:-1, 3]
         # since the environment must begin at some price, just assume that it's the
         # same as the previous close price
+
+        # FIXME: this is a bad way of doing things... we really should just make a
+        # giant tensor from the training dataframe in the beginning, then make log
+        # log returns out of that, then split it up appropriately into individual
+        # environments
+
         previous_closes = torch.cat([opens[0].unsqueeze(0), previous_closes])
         log_return_tensor[:, 0] = torch.log(opens / previous_closes)
-        return log_return_tensor
+        return self.log_return_scale_factor * log_return_tensor
 
     def set_spaces(self) -> None:
         # observation dimension consists solely of price data
@@ -168,8 +180,8 @@ class TimeSeriesEnv(BaseObject):
         new_states = self.determine_new_states(share_changes)
         rewards = self.determine_immediate_rewards()
         dones = self.find_finished_environments()
-        # If any environments have ended, all positions should be closed in preparation
-        # for the next environment.
+        # if any environments have ended, all positions should be closed in preparation
+        # for the next environment
         num_shares = self.short_shares + self.long_shares
         rewards -= dones * num_shares * self.per_share_commission
         self.reset_finished_environments(dones)
@@ -301,64 +313,6 @@ class TimeSeriesEnv(BaseObject):
         self.margin += initial_margin_requirement
         self.short_shares += -negative_share_changes
 
-    def force_legal_share_changes(self, share_changes: torch.Tensor) -> None:
-        positive_share_changes = share_changes.clone()
-        positive_share_changes[share_changes < 0] = 0
-        negative_share_changes = share_changes.clone()
-        negative_share_changes[share_changes > 0] = 0
-        # account for selling longs
-        new_long_shares = torch.relu(self.long_shares + negative_share_changes)
-        sell_long_shares = self.long_shares - new_long_shares
-        negative_share_changes += sell_long_shares
-        self.cash += sell_long_shares * (
-            self.current_open_prices - self.per_share_commission
-        )
-        self.long_shares = new_long_shares
-        # account for buying back shorts
-        new_short_shares = torch.relu(self.short_shares - positive_share_changes)
-        buy_back_shares = self.short_shares - new_short_shares
-        positive_share_changes -= buy_back_shares
-        self.cash -= buy_back_shares * (
-            self.current_open_prices - self.per_share_commission
-        )
-        self.short_shares = new_short_shares
-        new_margin = (
-            self.initial_margin_requirement
-            * self.short_shares
-            * self.current_open_prices
-        )
-        change_in_margin = new_margin - self.margin
-        self.cash -= change_in_margin
-        self.margin = new_margin
-        # account for buying new longs
-        new_long_positions = positive_share_changes * (
-            self.current_open_prices + self.per_share_commission
-        )
-        new_cash = self.cash - new_long_positions
-        # disallow long trades with insufficient capital
-        positive_share_changes[new_cash < 0] = 0
-        self.cash -= positive_share_changes * (
-            self.current_open_prices + self.per_share_commission
-        )
-        self.long_shares += positive_share_changes
-        # account for selling new shorts
-        short_commission = -negative_share_changes * self.per_share_commission
-        new_short_positions = -negative_share_changes * self.current_open_prices
-        initial_margin_requirement = (
-            self.initial_margin_requirement * new_short_positions
-        )
-        new_cash = self.cash - initial_margin_requirement - short_commission
-        # disallow short trades with insufficient margin capital
-        negative_share_changes[new_cash < 0] = 0
-        short_commission = -negative_share_changes * self.per_share_commission
-        new_short_positions = -negative_share_changes * self.current_open_prices
-        initial_margin_requirement = (
-            self.initial_margin_requirement * new_short_positions
-        )
-        self.cash -= initial_margin_requirement + short_commission
-        self.margin += initial_margin_requirement
-        self.short_shares += -negative_share_changes
-
     def reset(self) -> torch.Tensor:
         return self.get_price_data_observations()
 
@@ -367,7 +321,7 @@ class TimeSeriesEnv(BaseObject):
         for env_idx, env_ptr in zip(self.env_indices, self.env_pointers):
             prices = self.prices_by_environment[env_idx]
             # NOTE: for optimization, it's actually possible to parallelize this with
-            # the overloaded torch.narrow() function. It will require keeping
+            # the overloaded torch.narrow() function. However, it will require keeping
             # environments in a single tensor somehow...
             data_observation = torch.narrow(prices, 0, env_ptr.item(), self.num_obs)
             data_observations.append(data_observation)
@@ -375,43 +329,54 @@ class TimeSeriesEnv(BaseObject):
         return data_observation_tensors
 
     def determine_immediate_rewards(self) -> torch.Tensor:
-        # FIXME: implement a maintenance margin check if the price goes too high
-        # (> 130% maintenance margin requirement)
-
-        # FIXME: implement a margin release, if the price goes too low
-        # (<150% initial margin requirement)
-
-        # FIXME: implement a final maintenance margin check if the close price is too high
-        # (> 130% maintenance margin requirement)
-        
-        # FIXME: long shares times a positive change in price is a reward
-
-        # FIXME: short shares times a negative changes in price is a reward
-
+        self.dones = self.cash < 0
+        rewards = self.maintenance_margin_check(self.current_high_prices)
+        self.margin_release(self.current_low_prices)
+        rewards += self.maintenance_margin_check(self.current_close_prices)
+        self.long_shares[self.dones] = 0
+        self.short_shares[self.dones] = 0
         price_change = self.current_close_prices - self.current_open_prices
-        balances_change = self.num_shares * price_change
-        total_commision = torch.abs(self.true_share_changes) * self.per_share_commission
-        return balances_change - total_commision
+        rewards += (self.long_shares - self.short_shares) * price_change
+        rewards -= self.commissions
+        return rewards
+
+    def maintenance_margin_check(self, current_prices: torch.Tensor) -> torch.Tensor:
+        short_positions = self.short_shares * current_prices
+        maintenance_margin_requirement = short_positions * (
+            1 + self.maintenance_margin_requirement
+        )
+        margin_calls = torch.relu(maintenance_margin_requirement - self.margin)
+        self.cash -= margin_calls
+        self.margin += margin_calls
+        self.dones = torch.logical_or(self.dones, self.cash < 0)
+        return -margin_calls
+
+    def margin_release(self, current_prices: torch.Tensor) -> None:
+        short_positions = self.short_shares * current_prices
+        initial_margin_requirement = short_positions * self.initial_margin_requirement
+        margin_release = torch.relu(self.margin - initial_margin_requirement)
+        self.margin -= margin_release
+        self.cash += margin_release
 
     def find_finished_environments(self) -> torch.Tensor:
-        # FIXME: any environment in which the cash goes negative should terminate
-        # dones = self.cash < 0 ?
-        dones = torch.zeros(self.num_envs, 1, dtype=torch.bool, device=self.device)
         for idx, (env_idx, env_ptr) in enumerate(
             zip(self.env_indices, self.env_pointers)
         ):
             env = self.environments[env_idx]
             if env_ptr.item() + self.num_obs >= env.shape[0]:
-                dones[idx] = True
-        return dones
+                self.dones[idx] = True
+        return self.dones
 
     def reset_finished_environments(self, dones: torch.Tensor) -> None:
-        # FIXME: this needs a lot of reworking... use self.print() to diagnose what
-        # needs resetting
+        self.cash[dones] = self.starting_balance
+        self.margin[dones] = 0
+        self.long_shares[dones] = 0
+        self.short_shares[dones] = 0
         horizontal_dones = dones.view(4)
         self.env_indices[horizontal_dones] = np.random.randint(
             0, len(self.environments)
         )
         self.env_pointers[horizontal_dones] = 0
-        self.balances[dones] = self.starting_balance
-        self.num_shares[dones] = 0
+
+    def step_dataset(self, csv_key: str) -> None:
+        self.print()
