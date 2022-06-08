@@ -4,11 +4,11 @@ from finevo.environments.time_series_env import TimeSeriesEnv
 from typing import Dict, Tuple
 
 
-class TestSPYEnv(unittest.TestCase):
+class TestSPYTraining(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         self.num_envs = 4
-        self.env = TimeSeriesEnv("SPY", self.num_envs, testing_code=True)
+        self.env = TimeSeriesEnv("SPY", self.num_envs, testing_code=False)
 
     def test_should_reset_envs(self):
         states = self.env.reset()
@@ -25,6 +25,9 @@ class TestSPYEnv(unittest.TestCase):
         self.assertIsInstance(rewards, torch.Tensor)
         self.assertIsInstance(dones, torch.Tensor)
         self.assertIsInstance(info, dict)
+
+    def test_should_step_dataset(self):
+        self.env.step_dataset("train")
 
 
 if __name__ == "__main__":
