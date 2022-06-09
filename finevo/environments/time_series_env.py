@@ -71,80 +71,98 @@ class TimeSeriesEnv(BaseObject):
         self.set_up_environments()
 
     def read_data(self, path: str) -> None:
-        self.training_dataframe: pd.DataFrame = pd.read_csv(
+        self.dataframe: pd.DataFrame = pd.read_csv(
             path,
             names=["Date", "Time", "Open", "High", "Low", "Close", "Volume"],
         )
-        self.training_dataframe["Datetime"] = pd.to_datetime(
-            self.training_dataframe["Date"] + " " + self.training_dataframe["Time"]
+        self.dataframe["Datetime"] = pd.to_datetime(
+            self.dataframe["Date"] + " " + self.dataframe["Time"]
         )
-        self.training_dataframe = self.training_dataframe.set_index("Datetime")
+        self.dataframe = self.dataframe.set_index("Datetime")
 
     def force_market_hours(self) -> None:
-        self.training_dataframe = self.training_dataframe.between_time("9:30", "15:59")
+        self.dataframe = self.dataframe.between_time("9:30", "15:59")
 
     def set_up_environments(self) -> None:
-        print(f"Setting up environments...")
         self.environments: "list[torch.Tensor]" = []
         self.prices_by_environment: "list[torch.Tensor]" = []
-        unique_dates = self.training_dataframe["Date"].unique()
-        num_dates = len(unique_dates)
-        # use tqdm to track progress in setting up environments
-        for _, date in zip(tqdm(range(num_dates)), unique_dates):
+        unique_dates = self.dataframe["Date"].unique()
+        (start_indices, stop_indices) = self.determine_environment_bounds(unique_dates)
+        self.generate_torch_datasets()
+        self.generate_environments(start_indices, stop_indices)
+
+    def determine_environment_bounds(self, dates: np.ndarray) -> Tuple[list, list]:
+        print(f"Determining environment bounds...")
+        start_indices = []
+        stop_indices = []
+        date_counter = range(len(dates))
+        for _, date in zip(tqdm(date_counter), dates):
             (start_index, stop_index) = self.get_bounding_indices(date)
             if start_index < 0:
                 continue
-            blocked_df = self.training_dataframe[start_index:stop_index]
-            single_env = blocked_df.drop(["Date", "Time", "Volume"], axis=1)
-            (log_return_tensor, price_tensor) = self.get_tensors_from_dataframe(
-                single_env
-            )
-            self.environments.append(log_return_tensor)
-            self.prices_by_environment.append(price_tensor)
+            start_indices.append(start_index)
+            stop_indices.append(stop_index)
+        return (start_indices, stop_indices)
 
     def get_bounding_indices(self, date: str) -> Tuple[int, int]:
-        date_indices = self.training_dataframe["Date"] == date
-        start_index = self.training_dataframe.index.get_loc(
-            self.training_dataframe.index[date_indices][0]
+        date_indices = self.dataframe["Date"] == date
+        start_index = self.dataframe.index.get_loc(
+            self.dataframe.index[date_indices][0]
         )
-        last_index = self.training_dataframe.index.get_loc(
-            self.training_dataframe.index[date_indices][-1]
+        last_index = self.dataframe.index.get_loc(
+            self.dataframe.index[date_indices][-1]
         )
         # need to backtrack by however many intervals we would like to see on each
         # step through the environment
         true_start_index = start_index - self.num_intervals
         return (true_start_index, last_index)
 
-    def get_tensors_from_dataframe(
-        self, df: pd.DataFrame
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        np_array = df.values
-        self.values_per_interval = np_array.shape[1]
-        price_tensor = torch.tensor(np_array, device=self.device)
-        log_return_tensor = self.get_log_returns_from_price(price_tensor)
-        return (log_return_tensor.flatten(), price_tensor.flatten())
+    def generate_torch_datasets(self) -> None:
+        self.generate_price_dataset()
+        self.generate_log_return_dataset()
 
-    def get_log_returns_from_price(self, OHLC_tensor: torch.Tensor) -> torch.Tensor:
-        log_return_tensor = torch.zeros(OHLC_tensor.shape, device=self.device)
-        opens = OHLC_tensor[:, 0]
+    def generate_price_dataset(self) -> None:
+        reduced_dataframe = self.dataframe.drop(["Date", "Time", "Volume"], axis=1)
+        numpy_dataset = reduced_dataframe.values
+        self.values_per_interval = numpy_dataset.shape[1]
+        self.dataset = torch.tensor(
+            numpy_dataset,
+            device=self.device,
+        )
+
+    def generate_log_return_dataset(self) -> None:
+        log_return_dataset = torch.zeros(self.dataset.shape, device=self.device)
+        opens = self.dataset[:, 0]
+        # high, low, and close returns can be calculated using only the open values
         for idx in range(1, 4):
-            log_return_tensor[:, idx] = torch.log(OHLC_tensor[:, idx] / opens)
-        previous_closes = OHLC_tensor[:-1, 3]
-        # since the environment must begin at some price, just assume that it's the
-        # same as the previous close price
-
-        # FIXME: this is a bad way of doing things... we really should just make a
-        # giant tensor from the training dataframe in the beginning, then make log
-        # log returns out of that, then split it up appropriately into individual
-        # environments
-
+            log_return_dataset[:, idx] = torch.log(self.dataset[:, idx] / opens)
+        # open returns require using the previous close values
+        previous_closes = self.dataset[:-1, 3]
+        # assume the previous close for the first open value is the same
         previous_closes = torch.cat([opens[0].unsqueeze(0), previous_closes])
-        log_return_tensor[:, 0] = torch.log(opens / previous_closes)
-        return self.log_return_scale_factor * log_return_tensor
+        log_return_dataset[:, 0] = torch.log(opens / previous_closes)
+        self.log_return_dataset: torch.Tensor = (
+            self.log_return_scale_factor * log_return_dataset
+        )
+
+    def generate_environments(self, start_indices, stop_indices) -> None:
+        for start_index, stop_index in zip(start_indices, stop_indices):
+            price_env = self.dataset[start_index : stop_index + 1, :].flatten()
+            log_return_env = self.log_return_dataset[
+                start_index : stop_index + 1, :
+            ].flatten()
+            self.prices_by_environment.append(price_env)
+            self.environments.append(log_return_env)
+        eval_price_env = self.dataset.flatten()
+        eval_log_return_env = self.log_return_dataset.flatten()
+        self.prices_by_environment.append(eval_price_env)
+        self.environments.append(eval_log_return_env)
 
     def set_spaces(self) -> None:
-        # observation dimension consists solely of price data
-        self.num_obs = self.num_intervals * self.values_per_interval
+        self.num_price_values = self.num_intervals * self.values_per_interval
+        # observation dimension consists of:
+        # {price data + current position}
+        self.num_obs = self.num_price_values + 1
         # use a continuous action space and discretize based on max_shares
         self.num_acts = 1
         self.action_space = spaces.Box(
@@ -217,7 +235,10 @@ class TimeSeriesEnv(BaseObject):
         for env_idx, env_ptr in zip(self.env_indices, self.env_pointers):
             prices = self.prices_by_environment[env_idx]
             current_price_data = torch.narrow(
-                prices, 0, env_ptr.item(), self.values_per_interval
+                prices,
+                0,
+                env_ptr.item() + self.num_price_values - self.values_per_interval,
+                self.values_per_interval,
             )
             current_prices.append(current_price_data)
         self.current_prices = torch.stack(current_prices, dim=0)
@@ -314,19 +335,30 @@ class TimeSeriesEnv(BaseObject):
         self.short_shares += -negative_share_changes
 
     def reset(self) -> torch.Tensor:
-        return self.get_price_data_observations()
+        log_return_data = self.get_log_return_observations()
+        if not hasattr(self, "current_close_prices"):
+            self.set_current_prices()
+        current_positions = (
+            self.long_shares - self.short_shares
+        ) * self.current_close_prices
+        scaled_positions = current_positions / self.starting_balance
+        observation_tensors = torch.cat([log_return_data, scaled_positions], dim=1)
+        print(observation_tensors)
+        return observation_tensors
 
-    def get_price_data_observations(self) -> torch.Tensor:
-        data_observations: "list[torch.Tensor]" = []
+    def get_log_return_observations(self) -> torch.Tensor:
+        log_return_observations: "list[torch.Tensor]" = []
         for env_idx, env_ptr in zip(self.env_indices, self.env_pointers):
-            prices = self.prices_by_environment[env_idx]
+            log_returns = self.environments[env_idx]
             # NOTE: for optimization, it's actually possible to parallelize this with
             # the overloaded torch.narrow() function. However, it will require keeping
             # environments in a single tensor somehow...
-            data_observation = torch.narrow(prices, 0, env_ptr.item(), self.num_obs)
-            data_observations.append(data_observation)
-        data_observation_tensors = torch.stack(data_observations, dim=0)
-        return data_observation_tensors
+            log_return_observation = torch.narrow(
+                log_returns, 0, env_ptr.item(), self.num_price_values
+            )
+            log_return_observations.append(log_return_observation)
+        log_return_observation_tensors = torch.stack(log_return_observations, dim=0)
+        return log_return_observation_tensors
 
     def determine_immediate_rewards(self) -> torch.Tensor:
         self.dones = self.cash < 0
@@ -363,7 +395,7 @@ class TimeSeriesEnv(BaseObject):
             zip(self.env_indices, self.env_pointers)
         ):
             env = self.environments[env_idx]
-            if env_ptr.item() + self.num_obs >= env.shape[0]:
+            if env_ptr.item() + self.num_price_values >= env.shape[0]:
                 self.dones[idx] = True
         return self.dones
 
@@ -372,6 +404,7 @@ class TimeSeriesEnv(BaseObject):
         self.margin[dones] = 0
         self.long_shares[dones] = 0
         self.short_shares[dones] = 0
+        # FIXME: what is going on here??? where's the 4 coming from???
         horizontal_dones = dones.view(4)
         self.env_indices[horizontal_dones] = np.random.randint(
             0, len(self.environments)
@@ -379,4 +412,7 @@ class TimeSeriesEnv(BaseObject):
         self.env_pointers[horizontal_dones] = 0
 
     def step_dataset(self, csv_key: str) -> None:
-        self.print()
+        # FIXME: this could maybe be reworked as a separate single environment in one
+        # or both of the datasets, for example, the last environment can have millions
+        # of values that can be stepped through...
+        pass
