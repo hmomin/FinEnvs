@@ -14,7 +14,8 @@ class TimeSeriesEnv(BaseObject):
     def __init__(
         self,
         instrument_name: str,
-        num_envs: int = 2,
+        dataset_key: str = "dummy",
+        num_envs: int = 1,
         num_intervals: int = 390,
         max_shares: int = 5,
         starting_balance: float = 10000,
@@ -24,7 +25,6 @@ class TimeSeriesEnv(BaseObject):
         initial_margin_requirement: float = 1.5,
         maintenance_margin_requirement: float = 0.25,
         device_id: int = 0,
-        testing_code: bool = False,
     ):
         self.instrument_name = instrument_name
         self.num_envs = num_envs
@@ -36,36 +36,41 @@ class TimeSeriesEnv(BaseObject):
         self.maintenance_margin_requirement = maintenance_margin_requirement
         self.log_return_scale_factor = 100
         self.data_dir_name = self.get_data_dir_name(instrument_name)
-        file_key = "dummy" if testing_code else "train"
-        self.training_filename = self.find_file_by_key(file_key)
+        file_key = self.determine_file_key(dataset_key)
+        self.filename = self.find_file_by_key(file_key)
         self.device = set_device(device_id)
-        self.process_training_data(self.training_filename)
+        self.process_data(self.filename)
         self.set_spaces()
         self.set_environment_params()
 
     def get_data_dir_name(self, data_dir_name: str) -> str:
-        current_dir_name = os.path.dirname(os.path.realpath(__file__))
         if "data" not in data_dir_name:
+            current_dir_name = os.path.dirname(os.path.realpath(__file__))
             data_dir_name = os.path.join(current_dir_name, "..", "data", data_dir_name)
         return data_dir_name
 
+    def determine_file_key(self, key_attempt: str) -> str:
+        possible_keys = ["dummy", "train", "valid", "test"]
+        for possible_key in possible_keys:
+            if possible_key in key_attempt:
+                return possible_key
+        raise Exception(f"dataset_key expected to be one of: " + str(possible_keys))
+
     def find_file_by_key(self, key_string: str) -> str:
-        training_filenames = glob(
-            os.path.join(self.data_dir_name, "*" + key_string + "*")
-        )
-        num_files = len(training_filenames)
+        filenames = glob(os.path.join(self.data_dir_name, "*" + key_string + "*"))
+        num_files = len(filenames)
         if num_files == 0:
             raise Exception(
-                f"No file was found in {self.data_dir_name} with key {key_string}"
+                f"No file was found in {self.data_dir_name} with key ({key_string})"
             )
         elif num_files == 1:
-            return training_filenames[0]
+            return filenames[0]
         else:
             raise Exception(
-                f"More than one file was found in {self.data_dir_name} with key {key_string}"
+                f"More than one file was found in {self.data_dir_name} with key ({key_string})"
             )
 
-    def process_training_data(self, path: str) -> None:
+    def process_data(self, path: str) -> None:
         self.read_data(path)
         self.force_market_hours()
         self.set_up_environments()
@@ -87,22 +92,26 @@ class TimeSeriesEnv(BaseObject):
         self.environments: "list[torch.Tensor]" = []
         self.prices_by_environment: "list[torch.Tensor]" = []
         unique_dates = self.dataframe["Date"].unique()
-        (start_indices, stop_indices) = self.determine_environment_bounds(unique_dates)
+        (start_indices, stop_indices, max_length) = self.determine_environment_bounds(
+            unique_dates
+        )
         self.generate_torch_datasets()
-        self.generate_environments(start_indices, stop_indices)
+        self.generate_environments(start_indices, stop_indices, max_length)
 
     def determine_environment_bounds(self, dates: np.ndarray) -> Tuple[list, list]:
         print(f"Determining environment bounds...")
         start_indices = []
         stop_indices = []
+        max_length = 0
         date_counter = range(len(dates))
         for _, date in zip(tqdm(date_counter), dates):
             (start_index, stop_index) = self.get_bounding_indices(date)
             if start_index < 0:
                 continue
+            max_length = max(max_length, stop_index - start_index + 1)
             start_indices.append(start_index)
             stop_indices.append(stop_index)
-        return (start_indices, stop_indices)
+        return (start_indices, stop_indices, max_length)
 
     def get_bounding_indices(self, date: str) -> Tuple[int, int]:
         date_indices = self.dataframe["Date"] == date
@@ -145,18 +154,26 @@ class TimeSeriesEnv(BaseObject):
             self.log_return_scale_factor * log_return_dataset
         )
 
-    def generate_environments(self, start_indices, stop_indices) -> None:
+    def generate_environments(
+        self, start_indices: "list[int]", stop_indices: "list[int]", max_length: int
+    ) -> None:
+        max_flattened_length = max_length * self.values_per_interval
         for start_index, stop_index in zip(start_indices, stop_indices):
             price_env = self.dataset[start_index : stop_index + 1, :].flatten()
             log_return_env = self.log_return_dataset[
                 start_index : stop_index + 1, :
             ].flatten()
+            env_length = price_env.shape[0]
+            remaining_length = max_flattened_length - env_length
+            if remaining_length > 0:
+                nans = torch.rand(remaining_length, device=self.device).float()
+                nans[:] = float("nan")
+                price_env = torch.cat([price_env, nans])
+                log_return_env = torch.cat([log_return_env, nans])
             self.prices_by_environment.append(price_env)
             self.environments.append(log_return_env)
-        eval_price_env = self.dataset.flatten()
-        eval_log_return_env = self.log_return_dataset.flatten()
-        self.prices_by_environment.append(eval_price_env)
-        self.environments.append(eval_log_return_env)
+        self.environment_prices = torch.stack(self.prices_by_environment, dim=0)
+        self.environment_log_returns = torch.stack(self.environments, dim=0)
 
     def set_spaces(self) -> None:
         self.num_price_values = self.num_intervals * self.values_per_interval
@@ -180,6 +197,7 @@ class TimeSeriesEnv(BaseObject):
         self.env_indices = torch.randint(
             0, len(self.environments), (self.num_envs,), device=self.device
         )
+        self.env_indices[-1] = 0
         self.env_pointers = torch.zeros(
             (self.num_envs,), dtype=torch.int64, device=self.device
         )
@@ -232,6 +250,9 @@ class TimeSeriesEnv(BaseObject):
 
     def set_current_prices(self) -> None:
         current_prices: "list[torch.Tensor]" = []
+        # FIXME: rewrite this for-loop to use
+        # self.environment_prices
+        # self.environment_log_returns
         for env_idx, env_ptr in zip(self.env_indices, self.env_pointers):
             prices = self.prices_by_environment[env_idx]
             current_price_data = torch.narrow(
@@ -343,11 +364,14 @@ class TimeSeriesEnv(BaseObject):
         ) * self.current_close_prices
         scaled_positions = current_positions / self.starting_balance
         observation_tensors = torch.cat([log_return_data, scaled_positions], dim=1)
-        print(observation_tensors)
         return observation_tensors
 
     def get_log_return_observations(self) -> torch.Tensor:
         log_return_observations: "list[torch.Tensor]" = []
+        # FIXME: rewrite this for-loop to use
+        # self.environment_prices
+        # self.environment_log_returns
+        # (see note below)
         for env_idx, env_ptr in zip(self.env_indices, self.env_pointers):
             log_returns = self.environments[env_idx]
             # NOTE: for optimization, it's actually possible to parallelize this with
@@ -391,6 +415,9 @@ class TimeSeriesEnv(BaseObject):
         self.cash += margin_release
 
     def find_finished_environments(self) -> torch.Tensor:
+        # FIXME: rewrite this for-loop to use
+        # self.environment_prices
+        # self.environment_log_returns
         for idx, (env_idx, env_ptr) in enumerate(
             zip(self.env_indices, self.env_pointers)
         ):
@@ -404,15 +431,16 @@ class TimeSeriesEnv(BaseObject):
         self.margin[dones] = 0
         self.long_shares[dones] = 0
         self.short_shares[dones] = 0
-        # FIXME: what is going on here??? where's the 4 coming from???
-        horizontal_dones = dones.view(4)
-        self.env_indices[horizontal_dones] = np.random.randint(
-            0, len(self.environments)
+        horizontal_dones = dones.view(self.num_envs)
+        last_env_index = self.env_indices[-1].item()
+        self.env_indices[horizontal_dones] = torch.randint(
+            0,
+            len(self.environments),
+            self.env_indices[horizontal_dones].shape,
+            device=self.device,
         )
+        # the last environment should be reserved for evaluation purposes: it'll cycle
+        # through each of the days in sequence, instead of choosing randomly
+        if horizontal_dones[-1].item():
+            self.env_indices[-1] = (last_env_index + 1) % len(self.environments)
         self.env_pointers[horizontal_dones] = 0
-
-    def step_dataset(self, csv_key: str) -> None:
-        # FIXME: this could maybe be reworked as a separate single environment in one
-        # or both of the datasets, for example, the last environment can have millions
-        # of values that can be stepped through...
-        pass
