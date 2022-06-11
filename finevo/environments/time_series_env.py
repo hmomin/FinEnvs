@@ -89,8 +89,8 @@ class TimeSeriesEnv(BaseObject):
         self.dataframe = self.dataframe.between_time("9:30", "15:59")
 
     def set_up_environments(self) -> None:
-        self.environments: "list[torch.Tensor]" = []
-        self.prices_by_environment: "list[torch.Tensor]" = []
+        self.log_return_environments: torch.Tensor = None
+        self.price_environments: torch.Tensor = None
         unique_dates = self.dataframe["Date"].unique()
         (start_indices, stop_indices, max_length) = self.determine_environment_bounds(
             unique_dates
@@ -157,23 +157,24 @@ class TimeSeriesEnv(BaseObject):
     def generate_environments(
         self, start_indices: "list[int]", stop_indices: "list[int]", max_length: int
     ) -> None:
-        max_flattened_length = max_length * self.values_per_interval
+        price_environment_list: "list[torch.Tensor]" = []
+        log_return_environment_list: "list[torch.Tensor]" = []
         for start_index, stop_index in zip(start_indices, stop_indices):
-            price_env = self.dataset[start_index : stop_index + 1, :].flatten()
-            log_return_env = self.log_return_dataset[
-                start_index : stop_index + 1, :
-            ].flatten()
+            price_env = self.dataset[start_index : stop_index + 1, :]
+            log_return_env = self.log_return_dataset[start_index : stop_index + 1, :]
             env_length = price_env.shape[0]
-            remaining_length = max_flattened_length - env_length
+            remaining_length = max_length - env_length
             if remaining_length > 0:
-                nans = torch.rand(remaining_length, device=self.device).float()
+                nans = torch.rand(
+                    (remaining_length, price_env.shape[1]), device=self.device
+                ).float()
                 nans[:] = float("nan")
-                price_env = torch.cat([price_env, nans])
-                log_return_env = torch.cat([log_return_env, nans])
-            self.prices_by_environment.append(price_env)
-            self.environments.append(log_return_env)
-        self.environment_prices = torch.stack(self.prices_by_environment, dim=0)
-        self.environment_log_returns = torch.stack(self.environments, dim=0)
+                price_env = torch.cat([price_env, nans], dim=0)
+                log_return_env = torch.cat([log_return_env, nans], dim=0)
+            price_environment_list.append(price_env)
+            log_return_environment_list.append(log_return_env)
+        self.price_environments = torch.stack(price_environment_list, dim=0)
+        self.log_return_environments = torch.stack(log_return_environment_list, dim=0)
 
     def set_spaces(self) -> None:
         self.num_price_values = self.num_intervals * self.values_per_interval
@@ -195,7 +196,7 @@ class TimeSeriesEnv(BaseObject):
 
     def set_environment_params(self) -> None:
         self.env_indices = torch.randint(
-            0, len(self.environments), (self.num_envs,), device=self.device
+            0, self.price_environments.shape[0], (self.num_envs,), device=self.device
         )
         self.env_indices[-1] = 0
         self.env_pointers = torch.zeros(
@@ -212,7 +213,7 @@ class TimeSeriesEnv(BaseObject):
         self, actions: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict]:
         share_changes = self.get_share_changes_from_actions(actions)
-        self.env_pointers += self.values_per_interval
+        self.env_pointers += 1
         new_states = self.determine_new_states(share_changes)
         rewards = self.determine_immediate_rewards()
         dones = self.find_finished_environments()
@@ -249,20 +250,10 @@ class TimeSeriesEnv(BaseObject):
         return self.reset()
 
     def set_current_prices(self) -> None:
-        current_prices: "list[torch.Tensor]" = []
-        # FIXME: rewrite this for-loop to use
-        # self.environment_prices
-        # self.environment_log_returns
-        for env_idx, env_ptr in zip(self.env_indices, self.env_pointers):
-            prices = self.prices_by_environment[env_idx]
-            current_price_data = torch.narrow(
-                prices,
-                0,
-                env_ptr.item() + self.num_price_values - self.values_per_interval,
-                self.values_per_interval,
-            )
-            current_prices.append(current_price_data)
-        self.current_prices = torch.stack(current_prices, dim=0)
+        current_price_environments = self.price_environments[self.env_indices, :, :]
+        current_price_spots = self.env_pointers + self.num_intervals - 1
+        current_prices = current_price_environments[:, current_price_spots, :]
+        self.current_prices = current_prices[:, 0, :]
         self.current_open_prices = torch.select(self.current_prices, 1, 0).view(
             self.num_envs, 1
         )
@@ -367,16 +358,10 @@ class TimeSeriesEnv(BaseObject):
         return observation_tensors
 
     def get_log_return_observations(self) -> torch.Tensor:
+        # FIXME: figure out how to speed up this for-loop!
         log_return_observations: "list[torch.Tensor]" = []
-        # FIXME: rewrite this for-loop to use
-        # self.environment_prices
-        # self.environment_log_returns
-        # (see note below)
         for env_idx, env_ptr in zip(self.env_indices, self.env_pointers):
             log_returns = self.environments[env_idx]
-            # NOTE: for optimization, it's actually possible to parallelize this with
-            # the overloaded torch.narrow() function. However, it will require keeping
-            # environments in a single tensor somehow...
             log_return_observation = torch.narrow(
                 log_returns, 0, env_ptr.item(), self.num_price_values
             )
@@ -433,14 +418,15 @@ class TimeSeriesEnv(BaseObject):
         self.short_shares[dones] = 0
         horizontal_dones = dones.view(self.num_envs)
         last_env_index = self.env_indices[-1].item()
+        num_envs = self.price_environments.shape[0]
         self.env_indices[horizontal_dones] = torch.randint(
             0,
-            len(self.environments),
+            num_envs,
             self.env_indices[horizontal_dones].shape,
             device=self.device,
         )
         # the last environment should be reserved for evaluation purposes: it'll cycle
         # through each of the days in sequence, instead of choosing randomly
         if horizontal_dones[-1].item():
-            self.env_indices[-1] = (last_env_index + 1) % len(self.environments)
+            self.env_indices[-1] = (last_env_index + 1) % num_envs
         self.env_pointers[horizontal_dones] = 0
