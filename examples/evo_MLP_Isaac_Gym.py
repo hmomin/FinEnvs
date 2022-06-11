@@ -37,4 +37,4 @@ def train_Evo_MLP_on_environment(env_name: str):
 
 
 if __name__ == "__main__":
-    train_Evo_MLP_on_environment("Ant")
+    train_Evo_MLP_on_environment("Cartpole")
