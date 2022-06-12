@@ -1,5 +1,5 @@
 import isaacgym
-from TD3_agent import TD3AgentLSTM
+from dev_workspace.TD3.TD3_agent import TD3AgentLSTM
 from finevo.environments.isaac_gym_env import IsaacGymEnv
 from finevo.environments.isaac_gym_envs.utils.config_utils import get_isaac_gym_env_args
 
@@ -7,20 +7,18 @@ from finevo.environments.isaac_gym_envs.utils.config_utils import get_isaac_gym_
 def train_TD3_LSTM_on_environiment(env_name: str):
     env_args = get_isaac_gym_env_args(env_name)
     num_envs = env_args["num_envs"]
-    batch_size = num_envs * 16
     max_samples = 100_000_000
 
     env = IsaacGymEnv(env_name, num_envs, headless=True)
-    agent = TD3AgentLSTM(env_args, hidden_dim=1024, write_to_csv=True)
+    agent = TD3AgentLSTM(env_args, hidden_dim=1024, write_to_csv=False)
     states = env.reset()
     total_samples = 0
     while total_samples < max_samples:
-        (actions, state_action_values_1, state_action_values_2) = agent.step(states)
+        actions = agent.step(states)
         (next_states, rewards, dones, _) = env.step(actions)
-        agent.store(states, actions, rewards, dones, next_states)
+        agent.store(states, actions, rewards, next_states, dones)
         states = next_states
-        if agent.get_buffer_size() >= batch_size:
-            total_samples = agent.train(states)
+        total_samples = agent.train()
 
 
 if __name__ == "__main__":
