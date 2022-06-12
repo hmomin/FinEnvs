@@ -1,10 +1,9 @@
-import numpy as np
 import torch
 import torch.nn as nn
+from .TD3_Critic import TD3Critic
 from finevo.agents.networks.generic_network import GenericNetwork
 from finevo.agents.networks.multilayer_perceptron import MLPNetwork
 from finevo.agents.networks.lstm import LSTMNetwork
-from torch.distributions.normal import Normal
 
 
 class TD3Actor(GenericNetwork):
@@ -25,30 +24,35 @@ class TD3Actor(GenericNetwork):
         learning_rate: float,
         standard_deviation: float,
     ):
-        num_actions = shape[-1]
-
-        self.standard_deviation = nn.Parameter(
-            torch.ones((1, num_actions), device=self.device) * standard_deviation
-        )
-
-        self.mean = nn.Parameter(torch.zeros((1, num_actions), device=self.device))
-
+        self.shape = shape
+        self.standard_deviation = standard_deviation
         self.create_optimizer(learning_rate=learning_rate)
 
-    def take_noised_action(self, inputs: torch.Tensor) -> torch.Tensor:
-        action = self.forward(inputs)
-        noise = Normal(self.mean, self.standard_deviation)
-        noise = noise.sample()
-        noised_action = action + noise
-        clamped_noised_action = torch.clamp(noised_action, -1, +1)
-        return clamped_noised_action
+    def get_noisy_actions(self, inputs: torch.Tensor) -> torch.Tensor:
+        deterministic_actions = self.get_deterministic_actions(inputs)
+        noise = (
+            torch.randn(*deterministic_actions.shape, device=self.device)
+            * self.standard_deviation
+        )
+        noisy_actions = deterministic_actions + noise
+        clamped_noisy_actions = torch.clamp(noisy_actions, -1, +1)
+        return clamped_noisy_actions
 
-    def gradient_ascent_step(
-        self,
-        state_action_values: torch.Tensor,
-    ) -> None:
-        loss = -state_action_values
-        loss = loss.mean()
+    def get_deterministic_actions(self, inputs: torch.Tensor) -> torch.Tensor:
+        actions: torch.Tensor = self.forward(inputs).detach()
+        return actions
+
+    def update(self, states: torch.Tensor, critic: TD3Critic) -> None:
+        loss = self.compute_loss(states, critic)
+        self.gradient_descent_step(loss)
+
+    def compute_loss(self, states: torch.Tensor, critic: TD3Critic) -> torch.Tensor:
+        actions: torch.Tensor = self.forward(states)
+        inputs = torch.cat([states, actions], dim=1)
+        state_action_values: torch.Tensor = critic.forward(inputs)
+        return -state_action_values.mean()
+
+    def gradient_descent_step(self, loss: torch.Tensor) -> None:
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
