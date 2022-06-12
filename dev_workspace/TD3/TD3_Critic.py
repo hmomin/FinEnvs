@@ -1,6 +1,3 @@
-import imp
-from math import gamma
-from tkinter import Variable
 import torch
 import torch.nn as nn
 from finevo.agents.networks.generic_network import GenericNetwork
@@ -20,51 +17,29 @@ class TD3Critic(GenericNetwork):
             )
         return object.__new__(cls)
 
-    def compute_critic_target(
+    def update(
         self,
-        rewards: torch.Tensor,
-        dones: torch.Tensor,
-        minimum_state_action_values_target: torch.Tensor,
-        gamma: int,
-    ) -> torch.Tensor:
-        critic_target = (
-            rewards + (gamma) * (1 - dones) * minimum_state_action_values_target
-        )
-        return critic_target
+        states: torch.Tensor,
+        actions: torch.Tensor,
+        targets: torch.Tensor,
+        retain_graph=False,
+    ) -> None:
+        loss = self.compute_loss(states, actions, targets)
+        self.gradient_descent_step(loss, retain_graph)
 
-    def compute_critic_loss(
-        self,
-        rewards: torch.Tensor,
-        dones: torch.Tensor,
-        minimum_state_action_values_target: torch.Tensor,
-        state_action_values: torch.Tensor,
-        gamma: int,
+    def compute_loss(
+        self, states: torch.Tensor, actions: torch.Tensor, targets: torch.Tensor
     ) -> torch.Tensor:
-        critic_target = self.compute_critic_target(
-            rewards, dones, minimum_state_action_values_target, gamma
-        )
-        squared_errors = (critic_target - state_action_values) ** 2
-        mean_squared_error = squared_errors.mean()
-        return mean_squared_error
+        inputs = torch.cat([states, actions], dim=1)
+        state_action_values: torch.Tensor = self.forward(inputs)
+        mean_square_error = (state_action_values - targets).square().mean()
+        return mean_square_error
 
     def gradient_descent_step(
-        self,
-        rewards: torch.Tensor,
-        dones: torch.Tensor,
-        minimum_state_action_values_target: torch.Tensor,
-        state_action_values: torch.Tensor,
-        gamma: int,
-    ):
-        loss = self.compute_critic_loss(
-            rewards,
-            dones,
-            minimum_state_action_values_target,
-            state_action_values,
-            gamma,
-        )
-        loss.requires_grad_()
+        self, loss: torch.Tensor, retain_graph: bool = False
+    ) -> None:
         self.optimizer.zero_grad()
-        loss.backward()
+        loss.backward(retain_graph=retain_graph)
         self.optimizer.step()
 
 
