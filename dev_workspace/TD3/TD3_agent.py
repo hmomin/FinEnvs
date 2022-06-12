@@ -1,39 +1,45 @@
 import csv
-from math import gamma
 import os
 import torch
+from datetime import datetime
 from finevo.agents.networks.generic_network import GenericNetwork
 from finevo.base_object import BaseObject
-from TD3_buffer import Buffer
-from TD3_Critic import TD3Critic, TD3CriticLSTM, TD3CriticMLP
-from TD3_actor import TD3Actor, TD3ActorLSTM, TD3ActorMLP
-from datetime import datetime
 from finevo.device_utils import set_device
+from .TD3_actor import TD3Actor, TD3ActorLSTM, TD3ActorMLP
+from .TD3_buffer import Buffer
+from .TD3_Critic import TD3Critic, TD3CriticLSTM, TD3CriticMLP
 from time import time
-from typing import Tuple, Dict
+from typing import Any, Tuple, Dict
 
 
 class TD3Agent(BaseObject):
     def __init__(
         self,
         env_args: Dict,
-        num_epochs: int,
-        num_mini_batches: int,
         hidden_dims: Tuple[int],
-        policy_delay: int = 2,
+        num_epochs: int = 1,
+        mini_batch_size: int = 100,
+        training_std_dev: int = 0.2,
+        training_clip: int = 0.5,
+        rho: float = 0.005,
         gamma: float = 0.99,
-        rho: float = 0.055,
+        policy_delay: int = 2,
         write_to_csv: bool = True,
         device_id: int = 0,
     ) -> None:
         self.set_env_params(env_args)
-        self.device = set_device(device_id)
         self.num_epochs = num_epochs
-        self.policy_delay = policy_delay
+        self.mini_batch_size = mini_batch_size
+        self.training_std_dev = training_std_dev
+        self.traning_clip = training_clip
         self.rho = rho
         self.gamma = gamma
+        self.policy_delay = policy_delay
+        self.write_to_csv = write_to_csv
         self.set_network_shapes(hidden_dims)
-        self.buffer = Buffer(num_mini_batches, self.gamma, device_id)
+        self.device = set_device(device_id)
+        self.buffer = Buffer(device_id=device_id)
+        self.training_steps = 0
         self.current_returns = torch.zeros(
             (self.num_envs,), device=self.device, requires_grad=False
         )
@@ -42,15 +48,14 @@ class TD3Agent(BaseObject):
         )
         self.evaluation_return = None
         self.num_samples = 0
-        self.write_to_csv = write_to_csv
         if self.write_to_csv:
             self.create_progress_log()
         self.actor: TD3Actor = None
-        self.actor_target: TD3Actor = None
+        self.target_actor: TD3Actor = None
         self.critic_1: TD3Critic = None
         self.critic_2: TD3Critic = None
-        self.critic_target_1: TD3Critic = None
-        self.critic_target_2: TD3Critic = None
+        self.target_critic_1: TD3Critic = None
+        self.target_critic_2: TD3Critic = None
 
     def __new__(cls, *args, **kwargs):
         if cls is TD3Agent:
@@ -67,8 +72,27 @@ class TD3Agent(BaseObject):
         self.num_actions: int = env_args["num_actions"]
 
     def set_network_shapes(self, hidden_dims: Tuple[int]) -> None:
-        self.actor_shape = (self.num_observations, *hidden_dims, 1)
-        self.critic_shape = (self.num_observations + 1, *hidden_dims, 1)
+        self.actor_shape = (self.num_observations, *hidden_dims, self.num_actions)
+        self.critic_shape = (self.num_observations + self.num_actions, *hidden_dims, 1)
+
+    def initialize_target_parameters(self) -> None:
+        original_networks: "list[GenericNetwork]" = [
+            self.actor,
+            self.critic_1,
+            self.critic_2,
+        ]
+        target_networks: "list[GenericNetwork]" = [
+            self.target_actor,
+            self.target_critic_1,
+            self.target_critic_2,
+        ]
+        with torch.no_grad():
+            for net, target_net in zip(original_networks, target_networks):
+                for parameter, target_parameter in zip(
+                    net.parameters(), target_net.parameters()
+                ):
+                    target_parameter.sub_(target_parameter)
+                    target_parameter.add_(parameter)
 
     def create_progress_log(self) -> None:
         trails_dir = os.path.join(os.getcwd(), "trails")
@@ -96,31 +120,24 @@ class TD3Agent(BaseObject):
     def step(
         self,
         states: torch.Tensor,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        actions = self.actor.take_noised_action(states)
-        state_action_values_1 = self.critic_1.forward(
-            torch.cat([states, actions], dim=1)
-        ).detach()
-        state_action_values_2 = self.critic_2.forward(
-            torch.cat([states, actions], dim=1)
-        ).detach()
-
+    ) -> torch.Tensor:
+        actions = self.actor.get_noisy_actions(states)
         # the last environment is an "evaluation" environment, so it should strictly
         # use the means of the distribution
         evaluation_state = states[-1]
         evaluation_action = self.actor.forward(evaluation_state).detach()
         actions[-1, :] = evaluation_action
-        return (actions, state_action_values_1, state_action_values_2)
+        return actions
 
     def store(
         self,
         states: torch.Tensor,
         actions: torch.Tensor,
         rewards: torch.Tensor,
-        dones: torch.Tensor,
         next_states: torch.Tensor,
+        dones: torch.Tensor,
     ) -> None:
-        self.buffer.store(states, actions, rewards, dones, next_states)
+        self.buffer.store(states, actions, rewards, next_states, dones)
         self.current_returns += rewards
         evaluation_done = dones[-1]
         training_dones = dones[:-1]
@@ -134,10 +151,10 @@ class TD3Agent(BaseObject):
             self.current_returns[-1] = 0
         self.current_returns[training_done_indices] = 0
 
-    def log_progress(self) -> bool:
-        self.num_samples += self.buffer.size()
+    def log_progress(self) -> float:
+        self.num_samples += self.num_envs
         if self.evaluation_return == None:
-            return False
+            return None
         evaluation_return = self.evaluation_return
         num_training_episodes = self.training_returns.shape[0]
         mean_training_return = self.training_returns.mean().item()
@@ -164,7 +181,56 @@ class TD3Agent(BaseObject):
             (0, 1), device=self.device, requires_grad=False
         )
         self.evaluation_return = None
-        return True
+        return evaluation_return
+
+    def train(self) -> Tuple[int, float]:
+        for _ in range(self.num_epochs):
+            mini_batch_dict: Dict[str, torch.Tensor] = self.buffer.get_mini_batch(
+                self.mini_batch_size
+            )
+            for key in mini_batch_dict.keys():
+                mini_batch_dict[key].requires_grad_()
+            states = mini_batch_dict["states"]
+            actions = mini_batch_dict["actions"]
+            rewards = mini_batch_dict["rewards"]
+            next_states = mini_batch_dict["next_states"]
+            dones = mini_batch_dict["dones"]
+            targets = self.compute_targets(rewards, next_states, dones)
+            self.critic_1.update(states, actions, targets, True)
+            self.critic_2.update(states, actions, targets, False)
+            if self.training_steps % self.policy_delay == 0:
+                self.actor.update(states, self.critic_1)
+                self.update_target_networks()
+        evaluation_return = self.log_progress()
+        self.training_steps += 1
+        return (
+            (self.num_samples, evaluation_return)
+            if evaluation_return != None
+            else (0, 0)
+        )
+
+    def compute_targets(
+        self, rewards: torch.Tensor, next_states: torch.Tensor, dones: torch.Tensor
+    ) -> torch.Tensor:
+        target_actions: torch.Tensor = self.target_actor.forward(next_states)
+        noise = (
+            torch.randn(target_actions.shape, device=self.device)
+            * self.training_std_dev
+        )
+        clipped_noise = torch.clamp(noise, -self.traning_clip, +self.traning_clip)
+        target_actions = torch.clamp(target_actions + clipped_noise, -1, +1)
+        inputs = torch.cat([next_states, target_actions], dim=1)
+        target_state_action_values_1 = self.target_critic_1.forward(inputs)
+        target_state_action_values_2 = self.target_critic_2.forward(inputs)
+        target_state_action_values = torch.minimum(
+            target_state_action_values_1, target_state_action_values_2
+        )
+        return rewards + self.gamma * (1 - dones) * target_state_action_values
+
+    def update_target_networks(self) -> None:
+        self.update_target_network_params(self.actor, self.target_actor)
+        self.update_target_network_params(self.critic_1, self.target_critic_1)
+        self.update_target_network_params(self.critic_2, self.target_critic_2)
 
     def update_target_network_params(
         self, net: GenericNetwork, target_net: GenericNetwork
@@ -174,118 +240,39 @@ class TD3Agent(BaseObject):
                 target_param.data * (1.0 - self.rho) + param.data * self.rho
             )
 
-    def train(self, current_states: torch.Tensor) -> int:
-        self.buffer.prepare_training_data()
-        for _ in range(self.num_epochs):
-            batch_dict = self.buffer.get_batches()
-            batch_states = batch_dict["states"]
-            batch_actions = batch_dict["actions"]
-            batch_rewards = batch_dict["rewards"]
-            batch_dones = batch_dict["dones"]
-            batch_next_states = batch_dict["next_states"]
-            mini_batch_list = self.buffer.get_mini_batch_indices()
-            for iteration_num, mini_batch_indices in enumerate(mini_batch_list):
-                mini_batch_states = batch_states[mini_batch_indices, :]
-                mini_batch_actions = batch_actions[mini_batch_indices, :]
-                mini_batch_rewards = batch_rewards[mini_batch_indices, :]
-                mini_batch_dones = batch_dones[mini_batch_indices, :]
-                mini_batch_next_states = batch_next_states[mini_batch_indices, :]
-                mini_batch_target_actions = self.actor_target.take_noised_action(
-                    mini_batch_next_states
-                )
-                mini_batch_state_action_values_1 = self.critic_1.forward(
-                    torch.cat([mini_batch_states, mini_batch_actions], dim=1)
-                ).detach()
-                mini_batch_state_action_values_2 = self.critic_2.forward(
-                    torch.cat([mini_batch_states, mini_batch_actions], dim=1)
-                ).detach()
-                mini_batch_state_action_values_target_1 = self.critic_target_1.forward(
-                    torch.cat(
-                        [mini_batch_next_states, mini_batch_target_actions], dim=1
-                    )
-                ).detach()
-                mini_batch_state_action_values_target_2 = self.critic_target_2.forward(
-                    torch.cat(
-                        [mini_batch_next_states, mini_batch_target_actions], dim=1
-                    )
-                ).detach()
-
-                mini_batch_min_state_action_values_target = torch.minimum(
-                    mini_batch_state_action_values_target_1,
-                    mini_batch_state_action_values_target_2,
-                )
-
-                self.critic_1.gradient_descent_step(
-                    mini_batch_rewards,
-                    mini_batch_dones,
-                    mini_batch_min_state_action_values_target,
-                    mini_batch_state_action_values_1,
-                    self.gamma,
-                )
-                self.critic_2.gradient_descent_step(
-                    mini_batch_rewards,
-                    mini_batch_dones,
-                    mini_batch_min_state_action_values_target,
-                    mini_batch_state_action_values_2,
-                    self.gamma,
-                )
-                if iteration_num % self.policy_delay == 0:
-                    mini_batch_actions_without_noise = self.actor.forward(
-                        mini_batch_states
-                    )
-                    mini_batch_state_action_values_actor = self.critic_1.forward(
-                        torch.cat(
-                            [mini_batch_states, mini_batch_actions_without_noise], dim=1
-                        )
-                    )
-
-                    self.actor.gradient_ascent_step(
-                        mini_batch_state_action_values_actor
-                    )
-                    self.update_target_network_params(
-                        self.critic_1, self.critic_target_1
-                    )
-                    self.update_target_network_params(
-                        self.critic_2, self.critic_target_2
-                    )
-                    self.update_target_network_params(self.actor, self.actor_target)
-
-        progress_logged = self.log_progress()
-        self.buffer.clear()
-        return self.num_samples if progress_logged else 0
-
 
 class TD3AgentMLP(TD3Agent):
     def __init__(
         self,
         env_args: Dict,
-        num_epochs: int = 4,
-        num_mini_batches: int = 4,
-        learning_rate: float = 3e-5,
-        standard_deviation: float = 0.1,
         hidden_dims: Tuple[int] = (128, 128),
-        policy_delay: int = 2,
+        learning_rate: float = 3e-4,
+        num_epochs: int = 1,
+        mini_batch_size: int = 100,
+        action_std_dev: float = 0.1,
+        training_std_dev: float = 0.2,
+        training_clip: float = 0.5,
+        rho: float = 0.005,
         gamma: float = 0.99,
-        rho: float = 0.055,
+        policy_delay: int = 2,
         write_to_csv: bool = True,
         device_id: int = 0,
     ) -> None:
         super().__init__(
             env_args=env_args,
-            num_epochs=num_epochs,
-            num_mini_batches=num_mini_batches,
             hidden_dims=hidden_dims,
+            num_epochs=num_epochs,
+            mini_batch_size=mini_batch_size,
+            training_std_dev=training_std_dev,
+            training_clip=training_clip,
+            rho=rho,
             gamma=gamma,
             policy_delay=policy_delay,
-            rho=rho,
             write_to_csv=write_to_csv,
             device_id=device_id,
         )
         self.actor = TD3ActorMLP(
-            self.actor_shape, learning_rate, standard_deviation, device_id=device_id
-        )
-        self.actor_target = TD3ActorMLP(
-            self.actor_shape, learning_rate, standard_deviation, device_id=device_id
+            self.actor_shape, learning_rate, action_std_dev, device_id=device_id
         )
         self.critic_1 = TD3CriticMLP(
             self.critic_shape, learning_rate, device_id=device_id
@@ -293,51 +280,59 @@ class TD3AgentMLP(TD3Agent):
         self.critic_2 = TD3CriticMLP(
             self.critic_shape, learning_rate, device_id=device_id
         )
-        self.critic_target_1 = TD3CriticMLP(
+        self.target_actor = TD3ActorMLP(
+            self.actor_shape, learning_rate, action_std_dev, device_id=device_id
+        )
+        self.target_critic_1 = TD3CriticMLP(
             self.critic_shape, learning_rate, device_id=device_id
         )
-        self.critic_target_2 = TD3CriticMLP(
+        self.target_critic_2 = TD3CriticMLP(
             self.critic_shape, learning_rate, device_id=device_id
         )
+        self.initialize_target_parameters()
 
 
 class TD3AgentLSTM(TD3Agent):
     def __init__(
         self,
         env_args: Dict,
-        num_epochs: int = 4,
-        num_mini_batches: int = 4,
-        learning_rate: float = 3e-5,
-        standard_deviation: float = 0.1,
         hidden_dim: int = 128,
-        policy_delay: int = 2,
-        rho: float = 0.055,
+        learning_rate: float = 3e-4,
+        num_epochs: int = 1,
+        mini_batch_size: int = 100,
+        action_std_dev: float = 0.1,
+        training_std_dev: float = 0.2,
+        training_clip: float = 0.5,
+        rho: float = 0.005,
         gamma: float = 0.99,
+        policy_delay: int = 2,
         write_to_csv: bool = True,
         device_id: int = 0,
     ):
         hidden_dims = (hidden_dim,)
         super().__init__(
             env_args=env_args,
-            num_epochs=num_epochs,
-            num_mini_batches=num_mini_batches,
             hidden_dims=hidden_dims,
+            num_epochs=num_epochs,
+            mini_batch_size=mini_batch_size,
+            training_std_dev=training_std_dev,
+            training_clip=training_clip,
+            rho=rho,
             gamma=gamma,
             policy_delay=policy_delay,
-            rho=rho,
             write_to_csv=write_to_csv,
             device_id=device_id,
         )
         self.actor = TD3ActorLSTM(
             self.actor_shape,
             learning_rate,
-            standard_deviation,
+            action_std_dev,
             device_id=device_id,
         )
-        self.actor_target = TD3ActorLSTM(
+        self.target_actor = TD3ActorLSTM(
             self.actor_shape,
             learning_rate,
-            standard_deviation,
+            action_std_dev,
             device_id=device_id,
         )
         self.critic_1 = TD3CriticLSTM(
@@ -346,9 +341,10 @@ class TD3AgentLSTM(TD3Agent):
         self.critic_2 = TD3CriticLSTM(
             self.critic_shape, learning_rate, device_id=device_id
         )
-        self.critic_target_1 = TD3CriticLSTM(
+        self.target_critic_1 = TD3CriticLSTM(
             self.critic_shape, learning_rate, device_id=device_id
         )
-        self.critic_target_2 = TD3CriticLSTM(
+        self.target_critic_2 = TD3CriticLSTM(
             self.critic_shape, learning_rate, device_id=device_id
         )
+        self.initialize_target_parameters()
