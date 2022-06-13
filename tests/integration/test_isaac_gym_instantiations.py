@@ -1,7 +1,7 @@
 import isaacgym
 import os
 import unittest
-from finevo.environments.isaac_gym_envs.tasks import isaacgym_task_map
+from finenvs.environments.isaac_gym_envs.tasks import isaacgym_task_map
 from subprocess import call
 
 

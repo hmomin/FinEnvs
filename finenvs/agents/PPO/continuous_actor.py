@@ -1,9 +1,9 @@
 import numpy as np
 import torch
 import torch.nn as nn
-from .networks.generic_network import GenericNetwork
-from .networks.lstm import LSTMNetwork
-from .networks.multilayer_perceptron import MLPNetwork
+from ..networks.generic_network import GenericNetwork
+from ..networks.lstm import LSTMNetwork
+from ..networks.multilayer_perceptron import MLPNetwork
 from torch.distributions.normal import Normal
 
 

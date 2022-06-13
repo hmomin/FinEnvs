@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import unittest
-from finevo.agents.networks.lstm import LSTMNetwork
+from finenvs.agents.networks.lstm import LSTMNetwork
 
 
 class TestLSTMNetworks(unittest.TestCase):

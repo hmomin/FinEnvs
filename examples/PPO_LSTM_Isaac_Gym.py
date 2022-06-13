@@ -1,7 +1,7 @@
 import isaacgym
-from finevo.agents.PPO_agent import PPOAgentLSTM
-from finevo.environments.isaac_gym_env import IsaacGymEnv
-from finevo.environments.isaac_gym_envs.utils.config_utils import get_isaac_gym_env_args
+from finenvs.agents.PPO.PPO_agent import PPOAgentLSTM
+from finenvs.environments.isaac_gym_env import IsaacGymEnv
+from finenvs.environments.isaac_gym_envs.utils.config_utils import get_isaac_gym_env_args
 
 
 def train_PPO_LSTM_on_environment(env_name: str):

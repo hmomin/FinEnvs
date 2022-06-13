@@ -1,16 +1,16 @@
 import torch
 import torch.nn as nn
-from finevo.agents.networks.generic_network import GenericNetwork
-from finevo.agents.networks.lstm import LSTMNetwork
-from finevo.agents.networks.multilayer_perceptron import MLPNetwork
+from finenvs.agents.networks.generic_network import GenericNetwork
+from finenvs.agents.networks.lstm import LSTMNetwork
+from finenvs.agents.networks.multilayer_perceptron import MLPNetwork
 
 
-class TD3Critic(GenericNetwork):
+class Critic(GenericNetwork):
     def __init__(self, device_id: int = 0):
         super().__init__(device_id=device_id)
 
     def __new__(cls, *args, **kwargs):
-        if cls is TD3Critic:
+        if cls is Critic:
             raise TypeError(
                 f"'{cls.__name__}' should not be directly instantiated. "
                 + f"Try '{cls.__name__}MLP' or '{cls.__name__}LSTM' instead."
@@ -43,7 +43,7 @@ class TD3Critic(GenericNetwork):
         self.optimizer.step()
 
 
-class TD3CriticMLP(MLPNetwork, TD3Critic):
+class CriticMLP(MLPNetwork, Critic):
     def __init__(
         self,
         shape: tuple,
@@ -61,7 +61,7 @@ class TD3CriticMLP(MLPNetwork, TD3Critic):
         self.create_optimizer(learning_rate)
 
 
-class TD3CriticLSTM(LSTMNetwork, TD3Critic):
+class CriticLSTM(LSTMNetwork, Critic):
     def __init__(
         self,
         shape: tuple,

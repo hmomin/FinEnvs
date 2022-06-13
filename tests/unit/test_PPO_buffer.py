@@ -1,6 +1,6 @@
 import torch
 import unittest
-from finevo.agents.buffer import Buffer
+from finenvs.agents.PPO.buffer import Buffer
 from typing import Dict
 
 

@@ -1,17 +1,17 @@
 import torch
 import torch.nn as nn
-from .TD3_Critic import TD3Critic
-from finevo.agents.networks.generic_network import GenericNetwork
-from finevo.agents.networks.multilayer_perceptron import MLPNetwork
-from finevo.agents.networks.lstm import LSTMNetwork
+from .critic import Critic
+from finenvs.agents.networks.generic_network import GenericNetwork
+from finenvs.agents.networks.multilayer_perceptron import MLPNetwork
+from finenvs.agents.networks.lstm import LSTMNetwork
 
 
-class TD3Actor(GenericNetwork):
+class Actor(GenericNetwork):
     def __init__(self, device_id: int = 0):
         super().__init__(device_id=device_id)
 
     def __new__(cls, *args, **kwargs):
-        if cls is TD3Actor:
+        if cls is Actor:
             raise TypeError(
                 f"'{cls.__name__}' should not be directly initiated. "
                 + f"Try '{cls.__name__}MLP or {cls.__name__}LSTM' instead"
@@ -42,11 +42,11 @@ class TD3Actor(GenericNetwork):
         actions: torch.Tensor = self.forward(inputs).detach()
         return actions
 
-    def update(self, states: torch.Tensor, critic: TD3Critic) -> None:
+    def update(self, states: torch.Tensor, critic: Critic) -> None:
         loss = self.compute_loss(states, critic)
         self.gradient_descent_step(loss)
 
-    def compute_loss(self, states: torch.Tensor, critic: TD3Critic) -> torch.Tensor:
+    def compute_loss(self, states: torch.Tensor, critic: Critic) -> torch.Tensor:
         actions: torch.Tensor = self.forward(states)
         inputs = torch.cat([states, actions], dim=1)
         state_action_values: torch.Tensor = critic.forward(inputs)
@@ -58,7 +58,7 @@ class TD3Actor(GenericNetwork):
         self.optimizer.step()
 
 
-class TD3ActorMLP(MLPNetwork, TD3Actor):
+class ActorMLP(MLPNetwork, Actor):
     def __init__(
         self,
         shape: tuple,
@@ -77,7 +77,7 @@ class TD3ActorMLP(MLPNetwork, TD3Actor):
         self.set_up_parameters(shape, learning_rate, standard_deviation)
 
 
-class TD3ActorLSTM(LSTMNetwork, TD3Actor):
+class ActorLSTM(LSTMNetwork, Actor):
     def __init__(
         self,
         shape: tuple,

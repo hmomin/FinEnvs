@@ -1,8 +1,8 @@
 import torch
 import unittest
-from .TD3_Critic import TD3CriticMLP, TD3CriticLSTM
-from .TD3_actor import TD3ActorMLP, TD3ActorLSTM
-from finevo.device_utils import set_device
+from .TD3_Critic import CriticMLP, CriticLSTM
+from .TD3_actor import ActorMLP, ActorLSTM
+from finenvs.device_utils import set_device
 
 
 class TestActorCritic(unittest.TestCase):
@@ -12,12 +12,12 @@ class TestActorCritic(unittest.TestCase):
         cls.num_observations = 24
         cls.num_actions = 3
         cls.device = set_device(0)
-        cls.mlp_actor = TD3ActorMLP((cls.num_observations, 128, 128, cls.num_actions))
-        cls.lstm_actor = TD3ActorLSTM((cls.num_observations, 128, cls.num_actions))
-        cls.mlp_critic = TD3CriticMLP(
+        cls.mlp_actor = ActorMLP((cls.num_observations, 128, 128, cls.num_actions))
+        cls.lstm_actor = ActorLSTM((cls.num_observations, 128, cls.num_actions))
+        cls.mlp_critic = CriticMLP(
             (cls.num_observations + cls.num_actions, 128, 128, 1)
         )
-        cls.lstm_critic = TD3CriticLSTM(
+        cls.lstm_critic = CriticLSTM(
             (cls.num_observations + cls.num_actions, 128, 1)
         )
         cls.states = torch.rand((cls.num_envs, cls.num_observations), device=cls.device)

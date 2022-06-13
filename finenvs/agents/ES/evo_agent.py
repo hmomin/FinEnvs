@@ -2,9 +2,9 @@ import csv
 import os
 import torch
 from datetime import datetime
-from ..base_object import BaseObject
-from ..device_utils import set_device
-from .networks.parallel_mlp import ParallelMLP
+from ...base_object import BaseObject
+from ...device_utils import set_device
+from ..networks.parallel_mlp import ParallelMLP
 from time import time
 from typing import Tuple, Dict
 

@@ -1,7 +1,7 @@
 import numpy as np
 import torch
-from ..base_object import BaseObject
-from ..device_utils import set_device
+from ...base_object import BaseObject
+from ...device_utils import set_device
 from typing import Dict
 
 

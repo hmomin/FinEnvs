@@ -1,12 +1,12 @@
 import csv
 import os
 import torch
-from ..base_object import BaseObject
+from ...base_object import BaseObject
 from .buffer import Buffer
 from .continuous_actor import ContinuousActor, ContinuousActorLSTM, ContinuousActorMLP
 from .critic import Critic, CriticLSTM, CriticMLP
 from datetime import datetime
-from ..device_utils import set_device
+from ...device_utils import set_device
 from time import time
 from typing import Tuple, Dict
 

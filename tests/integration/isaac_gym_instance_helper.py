@@ -1,5 +1,5 @@
 import sys
-from finevo.environments.isaac_gym_env import IsaacGymEnv
+from finenvs.environments.isaac_gym_env import IsaacGymEnv
 
 
 def create_isaac_vec_environment(env_name: str):

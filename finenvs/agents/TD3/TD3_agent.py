@@ -2,14 +2,14 @@ import csv
 import os
 import torch
 from datetime import datetime
-from finevo.agents.networks.generic_network import GenericNetwork
-from finevo.base_object import BaseObject
-from finevo.device_utils import set_device
-from .TD3_actor import TD3Actor, TD3ActorLSTM, TD3ActorMLP
-from .TD3_buffer import Buffer
-from .TD3_Critic import TD3Critic, TD3CriticLSTM, TD3CriticMLP
+from .actor import Actor, ActorLSTM, ActorMLP
+from .buffer import Buffer
+from .critic import Critic, CriticLSTM, CriticMLP
+from finenvs.agents.networks.generic_network import GenericNetwork
+from finenvs.base_object import BaseObject
+from finenvs.device_utils import set_device
 from time import time
-from typing import Any, Tuple, Dict
+from typing import Tuple, Dict
 
 
 class TD3Agent(BaseObject):
@@ -50,12 +50,12 @@ class TD3Agent(BaseObject):
         self.num_samples = 0
         if self.write_to_csv:
             self.create_progress_log()
-        self.actor: TD3Actor = None
-        self.target_actor: TD3Actor = None
-        self.critic_1: TD3Critic = None
-        self.critic_2: TD3Critic = None
-        self.target_critic_1: TD3Critic = None
-        self.target_critic_2: TD3Critic = None
+        self.actor: Actor = None
+        self.target_actor: Actor = None
+        self.critic_1: Critic = None
+        self.critic_2: Critic = None
+        self.target_critic_1: Critic = None
+        self.target_critic_2: Critic = None
 
     def __new__(cls, *args, **kwargs):
         if cls is TD3Agent:
@@ -95,11 +95,11 @@ class TD3Agent(BaseObject):
                     target_parameter.add_(parameter)
 
     def create_progress_log(self) -> None:
-        trails_dir = os.path.join(os.getcwd(), "trails")
-        if not os.path.exists(trails_dir):
-            os.mkdir(trails_dir)
+        trials_dir = os.path.join(os.getcwd(), "trials")
+        if not os.path.exists(trials_dir):
+            os.mkdir(trials_dir)
         self.csv_name = os.path.join(
-            trails_dir,
+            trials_dir,
             datetime.now().strftime(f"{self.env_name}_TD3_%Y-%m-%d-%H-%M-%S.csv"),
         )
         csv_fields = [
@@ -271,22 +271,22 @@ class TD3AgentMLP(TD3Agent):
             write_to_csv=write_to_csv,
             device_id=device_id,
         )
-        self.actor = TD3ActorMLP(
+        self.actor = ActorMLP(
             self.actor_shape, learning_rate, action_std_dev, device_id=device_id
         )
-        self.critic_1 = TD3CriticMLP(
+        self.critic_1 = CriticMLP(
             self.critic_shape, learning_rate, device_id=device_id
         )
-        self.critic_2 = TD3CriticMLP(
+        self.critic_2 = CriticMLP(
             self.critic_shape, learning_rate, device_id=device_id
         )
-        self.target_actor = TD3ActorMLP(
+        self.target_actor = ActorMLP(
             self.actor_shape, learning_rate, action_std_dev, device_id=device_id
         )
-        self.target_critic_1 = TD3CriticMLP(
+        self.target_critic_1 = CriticMLP(
             self.critic_shape, learning_rate, device_id=device_id
         )
-        self.target_critic_2 = TD3CriticMLP(
+        self.target_critic_2 = CriticMLP(
             self.critic_shape, learning_rate, device_id=device_id
         )
         self.initialize_target_parameters()
@@ -323,28 +323,28 @@ class TD3AgentLSTM(TD3Agent):
             write_to_csv=write_to_csv,
             device_id=device_id,
         )
-        self.actor = TD3ActorLSTM(
+        self.actor = ActorLSTM(
             self.actor_shape,
             learning_rate,
             action_std_dev,
             device_id=device_id,
         )
-        self.target_actor = TD3ActorLSTM(
+        self.target_actor = ActorLSTM(
             self.actor_shape,
             learning_rate,
             action_std_dev,
             device_id=device_id,
         )
-        self.critic_1 = TD3CriticLSTM(
+        self.critic_1 = CriticLSTM(
             self.critic_shape, learning_rate, device_id=device_id
         )
-        self.critic_2 = TD3CriticLSTM(
+        self.critic_2 = CriticLSTM(
             self.critic_shape, learning_rate, device_id=device_id
         )
-        self.target_critic_1 = TD3CriticLSTM(
+        self.target_critic_1 = CriticLSTM(
             self.critic_shape, learning_rate, device_id=device_id
         )
-        self.target_critic_2 = TD3CriticLSTM(
+        self.target_critic_2 = CriticLSTM(
             self.critic_shape, learning_rate, device_id=device_id
         )
         self.initialize_target_parameters()

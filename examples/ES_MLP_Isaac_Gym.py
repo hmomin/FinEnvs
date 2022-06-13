@@ -1,8 +1,8 @@
 import isaacgym
 import torch
-from finevo.agents.evo_agent import EvoAgent
-from finevo.environments.isaac_gym_env import IsaacGymEnv
-from finevo.environments.isaac_gym_envs.utils.config_utils import get_isaac_gym_env_args
+from finenvs.agents.ES.evo_agent import EvoAgent
+from finenvs.environments.isaac_gym_env import IsaacGymEnv
+from finenvs.environments.isaac_gym_envs.utils.config_utils import get_isaac_gym_env_args
 
 torch.manual_seed(0)
 

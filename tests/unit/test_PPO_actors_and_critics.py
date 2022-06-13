@@ -1,11 +1,11 @@
 import torch
 import unittest
-from finevo.agents.continuous_actor import (
+from finenvs.agents.PPO.continuous_actor import (
     ContinuousActorMLP,
     ContinuousActorLSTM,
 )
-from finevo.agents.critic import CriticMLP, CriticLSTM
-from finevo.device_utils import set_device
+from finenvs.agents.PPO.critic import CriticMLP, CriticLSTM
+from finenvs.device_utils import set_device
 
 
 class TestActorCritic(unittest.TestCase):

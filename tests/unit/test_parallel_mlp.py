@@ -1,6 +1,6 @@
 import torch
 import unittest
-from finevo.agents.networks.parallel_mlp import ParallelMLP
+from finenvs.agents.networks.parallel_mlp import ParallelMLP
 
 
 class TestParallelMLPNetworks(unittest.TestCase):
