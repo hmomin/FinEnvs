@@ -274,12 +274,8 @@ class TD3AgentMLP(TD3Agent):
         self.actor = ActorMLP(
             self.actor_shape, learning_rate, action_std_dev, device_id=device_id
         )
-        self.critic_1 = CriticMLP(
-            self.critic_shape, learning_rate, device_id=device_id
-        )
-        self.critic_2 = CriticMLP(
-            self.critic_shape, learning_rate, device_id=device_id
-        )
+        self.critic_1 = CriticMLP(self.critic_shape, learning_rate, device_id=device_id)
+        self.critic_2 = CriticMLP(self.critic_shape, learning_rate, device_id=device_id)
         self.target_actor = ActorMLP(
             self.actor_shape, learning_rate, action_std_dev, device_id=device_id
         )

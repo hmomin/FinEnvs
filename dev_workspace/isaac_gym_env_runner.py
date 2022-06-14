@@ -2,7 +2,9 @@ import csv
 import isaacgym
 import torch
 from finenvs.environments.isaac_gym_env import IsaacGymEnv
-from finenvs.environments.isaac_gym_envs.utils.config_utils import get_isaac_gym_env_args
+from finenvs.environments.isaac_gym_envs.utils.config_utils import (
+    get_isaac_gym_env_args,
+)
 from time import time
 
 torch.manual_seed(42)

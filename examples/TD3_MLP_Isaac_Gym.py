@@ -1,7 +1,9 @@
 import isaacgym
 from finenvs.agents.TD3.TD3_agent import TD3AgentMLP
 from finenvs.environments.isaac_gym_env import IsaacGymEnv
-from finenvs.environments.isaac_gym_envs.utils.config_utils import get_isaac_gym_env_args
+from finenvs.environments.isaac_gym_envs.utils.config_utils import (
+    get_isaac_gym_env_args,
+)
 
 
 def train_TD3_MLP_on_environiment(env_name: str):
