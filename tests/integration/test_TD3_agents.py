@@ -1,6 +1,6 @@
 import isaacgym
 import unittest
-from .TD3_agent import TD3AgentLSTM, TD3AgentMLP
+from finenvs.agents.TD3.TD3_agent import TD3AgentLSTM, TD3AgentMLP
 from finenvs.environments.isaac_gym_env import IsaacGymEnv
 from finenvs.environments.isaac_gym_envs.utils.config_utils import (
     get_isaac_gym_env_args,

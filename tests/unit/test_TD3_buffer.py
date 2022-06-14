@@ -1,6 +1,6 @@
 import torch
 import unittest
-from .TD3_buffer import Buffer
+from finenvs.agents.TD3.buffer import Buffer
 from typing import Dict
 
 
