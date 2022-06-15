@@ -241,13 +241,6 @@ def train_unroll(agent, env, observation, num_unrolls, unroll_length):
         for _ in range(unroll_length):
             logits, action = agent.get_logits_action(observation)
             observation, reward, done, info = env.step(Agent.dist_postprocess(action))
-            pprint(observation.shape)
-            pprint(logits.shape)
-            pprint(action.shape)
-            pprint(reward.shape)
-            pprint(done.shape)
-            pprint(info)
-            raise Exception("STOP")
             one_unroll.observation.append(observation)
             one_unroll.logits.append(logits)
             one_unroll.action.append(action)
