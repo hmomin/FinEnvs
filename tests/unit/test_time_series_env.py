@@ -9,9 +9,9 @@ class TestTimeSeriesEnv(unittest.TestCase):
     def setUpClass(self):
         self.num_envs = 4
         self.envs = [
-            TimeSeriesEnv("IBM", self.num_envs),
-            TimeSeriesEnv("OIH", self.num_envs),
-            TimeSeriesEnv("SPY", self.num_envs),
+            TimeSeriesEnv("IBM", "dummy", self.num_envs),
+            TimeSeriesEnv("OIH", "dummy", self.num_envs),
+            TimeSeriesEnv("SPY", "dummy", self.num_envs),
         ]
 
     def test_should_reset_envs(self):
