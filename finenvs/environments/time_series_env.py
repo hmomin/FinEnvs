@@ -1,3 +1,4 @@
+import json
 import numpy as np
 import os
 import pandas as pd
@@ -36,8 +37,8 @@ class TimeSeriesEnv(BaseObject):
         self.maintenance_margin_requirement = maintenance_margin_requirement
         self.log_return_scale_factor = 100
         self.data_dir_name = self.get_data_dir_name(instrument_name)
-        file_key = self.determine_file_key(dataset_key)
-        self.filename = self.find_file_by_key(file_key)
+        self.file_key = self.determine_file_key(dataset_key)
+        self.filename = self.find_file_by_key()
         self.device = set_device(device_id)
         self.process_data(self.filename)
         self.set_spaces()
@@ -56,8 +57,9 @@ class TimeSeriesEnv(BaseObject):
                 return possible_key
         raise Exception(f"dataset_key expected to be one of: " + str(possible_keys))
 
-    def find_file_by_key(self, key_string: str) -> str:
-        filenames = glob(os.path.join(self.data_dir_name, "*" + key_string + "*"))
+    def find_file_by_key(self) -> str:
+        key_string = self.file_key
+        filenames = glob(os.path.join(self.data_dir_name, "*" + key_string + "*.csv"))
         num_files = len(filenames)
         if num_files == 0:
             raise Exception(
@@ -92,14 +94,37 @@ class TimeSeriesEnv(BaseObject):
         self.log_return_environments: torch.Tensor = None
         self.price_environments: torch.Tensor = None
         unique_dates = self.dataframe["Date"].unique()
-        (start_indices, stop_indices, max_length) = self.determine_environment_bounds(
+        (start_indices, stop_indices, max_length) = self.get_environment_bounds(
             unique_dates
         )
         self.generate_torch_datasets()
         self.generate_environments(start_indices, stop_indices, max_length)
 
-    def determine_environment_bounds(self, dates: np.ndarray) -> Tuple[list, list]:
-        print(f"Determining environment bounds...")
+    def get_environment_bounds(self, dates: np.ndarray) -> Tuple[list, list, int]:
+        bound_indices_name = os.path.join(
+            self.data_dir_name, f"{self.file_key}_bounds_cache.json"
+        )
+        try:
+            with open(bound_indices_name) as f:
+                cache = json.load(f)
+            return (
+                cache["start_indices"],
+                cache["stop_indices"],
+                cache["max_length"],
+            )
+        except:
+            print(f"Determining environment bounds...")
+            (
+                start_indices,
+                stop_indices,
+                max_length,
+            ) = self.determine_environment_bounds(dates)
+            self.cache_indices(
+                bound_indices_name, start_indices, stop_indices, max_length
+            )
+            return (start_indices, stop_indices, max_length)
+
+    def determine_environment_bounds(self, dates: np.ndarray) -> Tuple[list, list, int]:
         start_indices = []
         stop_indices = []
         max_length = 0
@@ -125,6 +150,17 @@ class TimeSeriesEnv(BaseObject):
         # step through the environment
         true_start_index = start_index - self.num_intervals
         return (true_start_index, last_index)
+
+    def cache_indices(
+        self, filename: str, starts: "list[int]", stops: "list[int]", max_length: int
+    ) -> None:
+        cache = {
+            "start_indices": starts,
+            "stop_indices": stops,
+            "max_length": max_length,
+        }
+        with open(filename, "w", encoding="utf-8") as f:
+            json.dump(cache, f, ensure_ascii=False, indent=4)
 
     def generate_torch_datasets(self) -> None:
         self.generate_price_dataset()
@@ -202,6 +238,9 @@ class TimeSeriesEnv(BaseObject):
         self.env_pointers = torch.zeros(
             (self.num_envs,), dtype=torch.int64, device=self.device
         )
+        self.env_spots = torch.arange(0, self.num_intervals, device=self.device).repeat(
+            self.num_envs, 1
+        )
         self.cash = self.starting_balance * torch.ones(
             (self.num_envs, 1), device=self.device
         )
@@ -214,6 +253,7 @@ class TimeSeriesEnv(BaseObject):
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict]:
         share_changes = self.get_share_changes_from_actions(actions)
         self.env_pointers += 1
+        self.env_spots += 1
         new_states = self.determine_new_states(share_changes)
         rewards = self.determine_immediate_rewards()
         dones = self.find_finished_environments()
@@ -251,19 +291,22 @@ class TimeSeriesEnv(BaseObject):
 
     def set_current_prices(self) -> None:
         current_price_environments = self.price_environments[self.env_indices, :, :]
-        current_price_spots = self.env_pointers + self.num_intervals - 1
-        current_prices = current_price_environments[:, current_price_spots, :]
-        self.current_prices = current_prices[:, 0, :]
-        self.current_open_prices = torch.select(self.current_prices, 1, 0).view(
+        # some torch.gather() magic below to find the current prices...
+        last_price_spots = self.env_spots[:, -1].unsqueeze(1)
+        current_index_spots = last_price_spots.repeat(1, 4).unsqueeze(1)
+        current_prices = torch.gather(
+            current_price_environments, dim=1, index=current_index_spots
+        ).squeeze()
+        self.current_open_prices = torch.select(current_prices, 1, 0).view(
             self.num_envs, 1
         )
-        self.current_high_prices = torch.select(self.current_prices, 1, 1).view(
+        self.current_high_prices = torch.select(current_prices, 1, 1).view(
             self.num_envs, 1
         )
-        self.current_low_prices = torch.select(self.current_prices, 1, 2).view(
+        self.current_low_prices = torch.select(current_prices, 1, 2).view(
             self.num_envs, 1
         )
-        self.current_close_prices = torch.select(self.current_prices, 1, 3).view(
+        self.current_close_prices = torch.select(current_prices, 1, 3).view(
             self.num_envs, 1
         )
 
@@ -347,7 +390,10 @@ class TimeSeriesEnv(BaseObject):
         self.short_shares += -negative_share_changes
 
     def reset(self) -> torch.Tensor:
-        log_return_data = self.get_log_return_observations()
+        raw_log_return_data = self.get_log_return_observations()
+        # flatten for MLP architectures
+        (x, y, z) = raw_log_return_data.shape
+        log_return_data = torch.reshape(raw_log_return_data, (x, y * z))
         if not hasattr(self, "current_close_prices"):
             self.set_current_prices()
         current_positions = (
@@ -358,16 +404,14 @@ class TimeSeriesEnv(BaseObject):
         return observation_tensors
 
     def get_log_return_observations(self) -> torch.Tensor:
-        # FIXME: figure out how to speed up this for-loop!
-        log_return_observations: "list[torch.Tensor]" = []
-        for env_idx, env_ptr in zip(self.env_indices, self.env_pointers):
-            log_returns = self.environments[env_idx]
-            log_return_observation = torch.narrow(
-                log_returns, 0, env_ptr.item(), self.num_price_values
-            )
-            log_return_observations.append(log_return_observation)
-        log_return_observation_tensors = torch.stack(log_return_observations, dim=0)
-        return log_return_observation_tensors
+        current_log_return_environments = self.log_return_environments[
+            self.env_indices, :, :
+        ]
+        current_index_spots = self.env_spots.unsqueeze(-1).repeat(1, 1, 4)
+        log_return_observations = torch.gather(
+            current_log_return_environments, dim=1, index=current_index_spots
+        )
+        return log_return_observations
 
     def determine_immediate_rewards(self) -> torch.Tensor:
         self.dones = self.cash < 0
@@ -400,16 +444,25 @@ class TimeSeriesEnv(BaseObject):
         self.cash += margin_release
 
     def find_finished_environments(self) -> torch.Tensor:
-        # FIXME: rewrite this for-loop to use
-        # self.environment_prices
-        # self.environment_log_returns
-        for idx, (env_idx, env_ptr) in enumerate(
-            zip(self.env_indices, self.env_pointers)
-        ):
-            env = self.environments[env_idx]
-            if env_ptr.item() + self.num_price_values >= env.shape[0]:
-                self.dones[idx] = True
+        current_environments = self.log_return_environments[self.env_indices, :, :]
+        max_length = current_environments.shape[1]
+        next_spots = (self.env_spots[:, -1] + 1).unsqueeze(-1)
+        self.dones = torch.logical_or(self.dones, next_spots >= max_length)
+        next_spots = next_spots.squeeze()
+        self.find_nan_spots(next_spots)
         return self.dones
+
+    def find_nan_spots(self, next_spots: torch.Tensor) -> None:
+        not_dones = ~self.dones.squeeze()
+        not_done_indices = not_dones.nonzero()
+        env_indices_to_check = self.env_indices[not_dones]
+        spots_to_check = next_spots[not_dones]
+        unchecked_envs = self.log_return_environments[env_indices_to_check, :, :]
+        spots_to_check = spots_to_check.unsqueeze(-1).unsqueeze(-1)
+        next_open_values = torch.gather(unchecked_envs, dim=1, index=spots_to_check)
+        nan_spots = torch.isnan(next_open_values).squeeze()
+        nans_found = not_done_indices[nan_spots]
+        self.dones[nans_found] = True
 
     def reset_finished_environments(self, dones: torch.Tensor) -> None:
         self.cash[dones] = self.starting_balance
@@ -430,3 +483,10 @@ class TimeSeriesEnv(BaseObject):
         if horizontal_dones[-1].item():
             self.env_indices[-1] = (last_env_index + 1) % num_envs
         self.env_pointers[horizontal_dones] = 0
+        starting_spots = self.env_spots[:, 0]
+        env_spot_deltas = torch.zeros(
+            (self.num_envs,), dtype=torch.long, device=self.device
+        )
+        env_spot_deltas[horizontal_dones] = starting_spots[horizontal_dones]
+        env_spot_deltas = env_spot_deltas.unsqueeze(-1).repeat(1, self.num_intervals)
+        self.env_spots -= env_spot_deltas
