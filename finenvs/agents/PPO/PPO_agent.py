@@ -18,7 +18,6 @@ class PPOAgent(BaseObject):
         num_epochs: int,
         num_mini_batches: int,
         hidden_dims: Tuple[int],
-        clip_epsilon: float = 0.2,
         gamma: float = 0.99,
         write_to_csv: bool = True,
         device_id: int = 0,
@@ -26,7 +25,6 @@ class PPOAgent(BaseObject):
         self.set_env_params(env_args)
         self.device = set_device(device_id)
         self.num_epochs = num_epochs
-        self.clip_epsilon = clip_epsilon
         self.set_network_shapes(hidden_dims)
         self.buffer = Buffer(num_mini_batches, gamma, device_id)
         self.current_returns = torch.zeros(
@@ -87,12 +85,13 @@ class PPOAgent(BaseObject):
     def step(
         self, states: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        values = self.critic.forward(states).detach()
-        distribution = self.actor.get_distribution(states)
+        float_states = states.float()
+        values = self.critic.forward(float_states).detach()
+        distribution = self.actor.get_distribution(float_states)
         actions = torch.clamp(distribution.sample(), -1, +1)
         # the last environment is an "evaluation" environment, so it should strictly
         # use the means of the distribution
-        evaluation_state = states[-1]
+        evaluation_state = float_states[-1]
         evaluation_action = self.actor.forward(evaluation_state).detach()
         actions[-1, :] = evaluation_action
         log_probs = distribution.log_prob(actions).detach()
@@ -154,11 +153,11 @@ class PPOAgent(BaseObject):
         return True
 
     def train(self, current_states: torch.Tensor) -> int:
-        current_state_values = self.critic.forward(current_states).detach()
+        current_state_values = self.critic.forward(current_states.float()).detach()
         self.buffer.prepare_training_data(current_state_values)
         for _ in range(self.num_epochs):
             batch_dict = self.buffer.get_batches()
-            batch_states = batch_dict["states"]
+            batch_states = batch_dict["states"].float()
             batch_actions = batch_dict["actions"]
             batch_log_probs = batch_dict["log_probs"]
             batch_advantages = batch_dict["advantages"]
@@ -189,9 +188,10 @@ class PPOAgentMLP(PPOAgent):
         num_epochs: int = 4,
         num_mini_batches: int = 4,
         learning_rate: float = 3e-4,
-        starting_std_dev: float = 1.0,
+        starting_std_dev: float = 0.5,
         hidden_dims: Tuple[int] = (128, 128),
         clip_epsilon: float = 0.2,
+        entropy_coefficient: float = 0.01,
         gamma: float = 0.99,
         write_to_csv: bool = True,
         device_id: int = 0,
@@ -201,7 +201,6 @@ class PPOAgentMLP(PPOAgent):
             num_epochs=num_epochs,
             num_mini_batches=num_mini_batches,
             hidden_dims=hidden_dims,
-            clip_epsilon=clip_epsilon,
             gamma=gamma,
             write_to_csv=write_to_csv,
             device_id=device_id,
@@ -211,6 +210,7 @@ class PPOAgentMLP(PPOAgent):
             learning_rate,
             starting_std_dev,
             clip_epsilon,
+            entropy_coefficient,
             device_id=device_id,
         )
         self.critic = CriticMLP(self.critic_shape, learning_rate, device_id=device_id)
@@ -223,9 +223,10 @@ class PPOAgentLSTM(PPOAgent):
         num_epochs: int = 4,
         num_mini_batches: int = 4,
         learning_rate: float = 3e-4,
-        starting_std_dev: float = 1.0,
+        starting_std_dev: float = 0.5,
         hidden_dim: int = 128,
         clip_epsilon: float = 0.2,
+        entropy_coefficient: float = 0.01,
         gamma: float = 0.99,
         write_to_csv: bool = True,
         device_id: int = 0,
@@ -236,7 +237,6 @@ class PPOAgentLSTM(PPOAgent):
             num_epochs=num_epochs,
             num_mini_batches=num_mini_batches,
             hidden_dims=hidden_dims,
-            clip_epsilon=clip_epsilon,
             gamma=gamma,
             write_to_csv=write_to_csv,
             device_id=device_id,
@@ -246,6 +246,7 @@ class PPOAgentLSTM(PPOAgent):
             learning_rate,
             starting_std_dev,
             clip_epsilon,
+            entropy_coefficient,
             device_id=device_id,
         )
         self.critic = CriticLSTM(self.critic_shape, learning_rate, device_id=device_id)
