@@ -8,7 +8,7 @@ from ..device_utils import set_device
 from glob import glob
 from gym import spaces
 from tqdm import tqdm
-from typing import Tuple
+from typing import Dict, Tuple
 
 
 class TimeSeriesEnv(BaseObject):
@@ -172,11 +172,14 @@ class TimeSeriesEnv(BaseObject):
         self.values_per_interval = numpy_dataset.shape[1]
         self.dataset = torch.tensor(
             numpy_dataset,
+            dtype=torch.float64,
             device=self.device,
         )
 
     def generate_log_return_dataset(self) -> None:
-        log_return_dataset = torch.zeros(self.dataset.shape, device=self.device)
+        log_return_dataset = torch.zeros(
+            self.dataset.shape, dtype=torch.float64, device=self.device
+        )
         opens = self.dataset[:, 0]
         # high, low, and close returns can be calculated using only the open values
         for idx in range(1, 4):
@@ -230,6 +233,14 @@ class TimeSeriesEnv(BaseObject):
             dtype=np.float64,
         )
 
+    def get_env_args(self) -> Dict:
+        return {
+            "env_name": self.instrument_name,
+            "num_envs": self.num_envs,
+            "num_observations": self.num_obs,
+            "num_actions": self.num_acts,
+        }
+
     def set_environment_params(self) -> None:
         self.env_indices = torch.randint(
             0, self.price_environments.shape[0], (self.num_envs,), device=self.device
@@ -262,7 +273,7 @@ class TimeSeriesEnv(BaseObject):
         num_shares = self.short_shares + self.long_shares
         rewards -= dones * num_shares * self.per_share_commission
         self.reset_finished_environments(dones)
-        return (new_states, rewards, dones, {})
+        return (new_states, rewards.squeeze(), dones.int().squeeze(), {})
 
     def get_share_changes_from_actions(self, actions: torch.Tensor) -> torch.Tensor:
         scaled_actions = actions * (self.max_shares + 0.5)
