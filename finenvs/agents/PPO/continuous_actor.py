@@ -25,8 +25,10 @@ class ContinuousActor(GenericNetwork):
         learning_rate: float,
         starting_std_dev: float,
         clip_epsilon: float,
+        entropy_coefficient: float,
     ):
         self.clip_epsilon = clip_epsilon
+        self.entropy_coefficient = entropy_coefficient
         num_actions = shape[-1]
         self.log_standard_deviation = nn.Parameter(
             torch.ones((1, num_actions), device=self.device) * np.log(starting_std_dev)
@@ -37,13 +39,6 @@ class ContinuousActor(GenericNetwork):
         means = self.forward(inputs)
         standard_deviations = torch.exp(self.log_standard_deviation)
         return Normal(means, standard_deviations)
-
-    def get_new_log_probs(
-        self, states: torch.Tensor, actions: torch.Tensor
-    ) -> torch.Tensor:
-        distribution = self.get_distribution(states)
-        new_log_probs = distribution.log_prob(actions)
-        return new_log_probs
 
     def gradient_ascent_step(
         self,
@@ -64,7 +59,8 @@ class ContinuousActor(GenericNetwork):
         log_probs: torch.Tensor,
         advantages: torch.Tensor,
     ) -> torch.Tensor:
-        new_log_probs = self.get_new_log_probs(states, actions)
+        distribution = self.get_distribution(states)
+        new_log_probs = distribution.log_prob(actions)
         prob_ratios = torch.exp(new_log_probs - log_probs)
         first_term = prob_ratios * advantages
         second_term = (
@@ -73,7 +69,9 @@ class ContinuousActor(GenericNetwork):
         )
         clip_objective = torch.minimum(first_term, second_term)
         mean_clipped_objective = clip_objective.mean().mean()
-        return -mean_clipped_objective
+        entropy = distribution.entropy().mean()
+        actor_objective = mean_clipped_objective + self.entropy_coefficient * entropy
+        return -actor_objective
 
 
 class ContinuousActorMLP(MLPNetwork, ContinuousActor):
@@ -83,6 +81,7 @@ class ContinuousActorMLP(MLPNetwork, ContinuousActor):
         learning_rate: float = 3e-4,
         starting_std_dev: float = 1.0,
         clip_epsilon: float = 0.2,
+        entropy_coefficient: float = 0.01,
         layer_activation=nn.ELU,
         output_activation=nn.Tanh,
         device_id: int = 0,
@@ -93,7 +92,9 @@ class ContinuousActorMLP(MLPNetwork, ContinuousActor):
             output_activation=output_activation,
             device_id=device_id,
         )
-        self.set_up_parameters(shape, learning_rate, starting_std_dev, clip_epsilon)
+        self.set_up_parameters(
+            shape, learning_rate, starting_std_dev, clip_epsilon, entropy_coefficient
+        )
 
 
 class ContinuousActorLSTM(LSTMNetwork, ContinuousActor):
@@ -103,6 +104,7 @@ class ContinuousActorLSTM(LSTMNetwork, ContinuousActor):
         learning_rate: float = 3e-4,
         starting_std_dev: float = 1.0,
         clip_epsilon: float = 0.2,
+        entropy_coefficient: float = 0.01,
         output_activation=nn.Tanh,
         device_id: int = 0,
     ):
@@ -111,4 +113,6 @@ class ContinuousActorLSTM(LSTMNetwork, ContinuousActor):
             output_activation=output_activation,
             device_id=device_id,
         )
-        self.set_up_parameters(shape, learning_rate, starting_std_dev, clip_epsilon)
+        self.set_up_parameters(
+            shape, learning_rate, starting_std_dev, clip_epsilon, entropy_coefficient
+        )
