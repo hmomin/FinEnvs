@@ -1,10 +1,10 @@
+import numpy as np
 import torch
 import torch.nn as nn
-import numpy as np
+from .critic import Critic
 from finenvs.agents.networks.generic_network import GenericNetwork
 from finenvs.agents.networks.lstm import LSTMNetwork
 from finenvs.agents.networks.multilayer_perceptron import MLPNetwork
-from critic import Critic
 from torch.distributions import Normal
 from torch.optim import Adam
 

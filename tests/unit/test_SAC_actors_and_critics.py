@@ -1,7 +1,7 @@
 import torch
 import unittest
-from critic import CriticMLP, CriticLSTM
-from actor import ActorMLP, ActorLSTM
+from finenvs.agents.SAC.actor import ActorMLP, ActorLSTM
+from finenvs.agents.SAC.critic import CriticMLP, CriticLSTM
 from finenvs.device_utils import set_device
 
 

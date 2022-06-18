@@ -1,10 +1,10 @@
 import csv
 import os
 import torch
+from .actor import Actor, ActorLSTM, ActorMLP
+from .buffer import Buffer
+from .critic import Critic, CriticLSTM, CriticMLP
 from datetime import datetime
-from actor import Actor, ActorLSTM, ActorMLP
-from critic import Critic, CriticLSTM, CriticMLP
-from buffer import Buffer
 from finenvs.agents.networks.generic_network import GenericNetwork
 from finenvs.base_object import BaseObject
 from finenvs.device_utils import set_device
