@@ -88,11 +88,11 @@ class SACAgent(BaseObject):
                     target_parameter.add_(parameter)
 
     def create_progress_log(self) -> None:
-        trails_dir = os.path.join(os.getcwd(), "trails")
-        if not os.path.exists(trails_dir):
-            os.mkdir(trails_dir)
+        trials_dir = os.path.join(os.getcwd(), "trials")
+        if not os.path.exists(trials_dir):
+            os.mkdir(trials_dir)
         self.csv_name = os.path.join(
-            trails_dir,
+            trials_dir,
             datetime.now().strftime(f"{self.env_name}_SAC_%Y-%m-%d-%H-%M-%S.csv"),
         )
         csv_fields = [
