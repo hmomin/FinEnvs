@@ -17,9 +17,7 @@ class TestActorCritic(unittest.TestCase):
         cls.mlp_critic = CriticMLP(
             (cls.num_observations + cls.num_actions, 128, 128, 1)
         )
-        cls.lstm_critic = CriticLSTM(
-            (cls.num_observations + cls.num_actions, 128, 1)
-        )
+        cls.lstm_critic = CriticLSTM((cls.num_observations + cls.num_actions, 128, 1))
         cls.states = torch.rand((cls.num_envs, cls.num_observations), device=cls.device)
         cls.actions = torch.rand((cls.num_envs, cls.num_actions), device=cls.device)
 

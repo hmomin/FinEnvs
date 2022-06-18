@@ -11,6 +11,7 @@ from finenvs.device_utils import set_device
 from time import time
 from typing import Tuple, Dict
 
+
 class SACAgent(BaseObject):
     def __init__(
         self,
@@ -24,7 +25,7 @@ class SACAgent(BaseObject):
         policy_delay: int = 2,
         write_to_csv: bool = True,
         device_id: int = 0,
-        ) -> None:
+    ) -> None:
         super().__init__()
         self.set_env_params(env_args)
         self.num_epochs = num_epochs
@@ -39,10 +40,10 @@ class SACAgent(BaseObject):
         self.buffer = Buffer(device_id=device_id)
         self.training_steps = 0
         self.current_returns = torch.zeros(
-            (self.num_envs,), device = self.device, requires_grad=False
+            (self.num_envs,), device=self.device, requires_grad=False
         )
         self.training_returns = torch.zeros(
-            (0,1), device = self.device, requires_grad=False
+            (0, 1), device=self.device, requires_grad=False
         )
         self.evaluation_return = None
         self.num_samples = 0
@@ -61,34 +62,33 @@ class SACAgent(BaseObject):
                 + "Try 'SACAgentMLP' or 'SACAgentLSTM' instead."
             )
         return object.__new__(cls)
-    
-    def set_env_params(self,env_args: Dict) -> None:
+
+    def set_env_params(self, env_args: Dict) -> None:
         self.env_name: str = env_args["env_name"]
         self.num_envs: str = env_args["num_envs"]
         self.num_observations: int = env_args["num_observations"]
         self.num_actions: int = env_args["num_actions"]
-    
+
     def set_network_shapes(self, hidden_dims: Tuple[int]) -> None:
         self.actor_shape = (self.num_observations, *hidden_dims, self.num_actions)
         self.critic_shape = (self.num_observations + self.num_actions, *hidden_dims, 1)
-    
-    def initialize_target_parameters(self)->None:
-        original_networks: "list[GenericNetwork]" = [
-            self.critic_1,
-            self.critic_2
-        ]
+
+    def initialize_target_parameters(self) -> None:
+        original_networks: "list[GenericNetwork]" = [self.critic_1, self.critic_2]
         target_networks: "list[GenericNetwork]" = [
             self.target_critic_1,
-            self.target_critic_2
+            self.target_critic_2,
         ]
         with torch.no_grad():
             for net, target_net in zip(original_networks, target_networks):
-                for parameter, target_parameter in zip(net.parameters(),target_net.parameters()):
+                for parameter, target_parameter in zip(
+                    net.parameters(), target_net.parameters()
+                ):
                     target_parameter.sub_(target_parameter)
                     target_parameter.add_(parameter)
-    
+
     def create_progress_log(self) -> None:
-        trails_dir = os.path.join(os.getcwd(),"trails")
+        trails_dir = os.path.join(os.getcwd(), "trails")
         if not os.path.exists(trails_dir):
             os.mkdir(trails_dir)
         self.csv_name = os.path.join(
@@ -106,22 +106,22 @@ class SACAgent(BaseObject):
         with open(self.csv_name, "a") as f:
             writer = csv.writer(f)
             writer.writerow(csv_fields)
-    
+
     def get_buffer_size(self) -> int:
         return self.buffer.size()
-    
+
     def step(
         self,
         states: torch.Tensor,
     ) -> torch.Tensor:
         actions = self.actor.get_actions_and_log_probs(states)[0]
-        #The last environiment is an "evaluation" environiment, so it should strictly
-        #use the means of the distribution
+        # The last environiment is an "evaluation" environiment, so it should strictly
+        # use the means of the distribution
         evaluation_state = states[-1]
         evaluation_action = self.actor.forward(evaluation_state).detach()
         actions[-1] = evaluation_action
         return actions
-    
+
     def store(
         self,
         states: torch.Tensor,
@@ -130,7 +130,7 @@ class SACAgent(BaseObject):
         next_states: torch.Tensor,
         dones: torch.Tensor,
     ) -> None:
-        self.buffer.store(states,actions,rewards,next_states,dones)
+        self.buffer.store(states, actions, rewards, next_states, dones)
         self.current_returns += rewards
         evaluation_done = dones[-1]
         training_dones = dones[:-1]
@@ -139,11 +139,11 @@ class SACAgent(BaseObject):
         self.training_returns = torch.cat(
             [self.training_returns, finished_training_returns], dim=0
         )
-        if evaluation_done.item()==1:
+        if evaluation_done.item() == 1:
             self.evaluation_return = self.current_returns[-1].item()
-            self.current_returns[-1]=0
+            self.current_returns[-1] = 0
         self.current_returns[training_done_indices] = 0
-    
+
     def log_progress(self) -> float:
         self.num_samples += self.num_envs
         if self.evaluation_return == None:
@@ -175,7 +175,7 @@ class SACAgent(BaseObject):
         )
         self.evaluation_return = None
         return evaluation_return
-    
+
     def train(self) -> Tuple[int, float]:
         for _ in range(self.num_epochs):
             mini_batch_dict: Dict[str, torch.Tensor] = self.buffer.get_mini_batch(
@@ -192,35 +192,42 @@ class SACAgent(BaseObject):
             self.critic_1.update(states, actions, targets, True)
             self.critic_2.update(states, actions, targets, True)
             if self.training_steps % self.policy_delay == 0:
-                self.actor.update(states, self.critic_1,self.critic_2)
+                self.actor.update(states, self.critic_1, self.critic_2)
                 self.update_target_networks()
         evaluation_return = self.log_progress()
         self.training_steps += 1
         return (
             (self.num_samples, evaluation_return)
             if evaluation_return != None
-            else (0,0)
+            else (0, 0)
         )
-    
+
     def compute_targets(
         self,
         rewards: torch.Tensor,
         next_states: torch.Tensor,
         dones: torch.Tensor,
-    ) -> torch.Tensor :
+    ) -> torch.Tensor:
         actions, log_probs = self.actor.get_actions_and_log_probs(next_states)
-        next_state_action_value_1 = self.target_critic_1.forward(torch.cat([next_states,actions],dim=1))
-        next_state_action_value_2 = self.target_critic_2.forward(torch.cat([next_states,actions],dim=1))
-        min_state_action_value = torch.min(next_state_action_value_1, next_state_action_value_2)
+        next_state_action_value_1 = self.target_critic_1.forward(
+            torch.cat([next_states, actions], dim=1)
+        )
+        next_state_action_value_2 = self.target_critic_2.forward(
+            torch.cat([next_states, actions], dim=1)
+        )
+        min_state_action_value = torch.min(
+            next_state_action_value_1, next_state_action_value_2
+        )
         entropy = self.actor.log_alpha.exp() * log_probs
-        target = rewards + (self.gamma)*(1-dones)*(min_state_action_value - entropy)
+        target = rewards + (self.gamma) * (1 - dones) * (
+            min_state_action_value - entropy
+        )
         return target
-
 
     def update_target_networks(self) -> None:
         self.update_target_network_params(self.critic_1, self.target_critic_1)
         self.update_target_network_params(self.critic_2, self.target_critic_2)
-    
+
     def update_target_network_params(
         self,
         net: GenericNetwork,
@@ -231,93 +238,88 @@ class SACAgent(BaseObject):
                 target_param.data * (1.0 - self.rho) + param.data * self.rho
             )
 
+
 class SACAgentMLP(SACAgent):
     def __init__(
-        self, 
-        env_args: Dict, 
-        hidden_dims: Tuple[int] = (128,128),
+        self,
+        env_args: Dict,
+        hidden_dims: Tuple[int] = (128, 128),
         learning_rate: float = 3e-4,
-        num_epochs: int = 1, 
-        mini_batch_size: int = 100, 
-        training_std_dev: float = 0.2, 
-        rho: float = 0.005, 
-        gamma: float = 0.99, 
-        policy_delay: int = 2, 
-        write_to_csv: bool = True, 
-        device_id: int = 0
-        ) -> None:
+        num_epochs: int = 1,
+        mini_batch_size: int = 100,
+        training_std_dev: float = 0.2,
+        rho: float = 0.005,
+        gamma: float = 0.99,
+        policy_delay: int = 2,
+        write_to_csv: bool = True,
+        device_id: int = 0,
+    ) -> None:
         super().__init__(
-            env_args, 
-            hidden_dims, 
-            num_epochs, 
-            mini_batch_size, 
-            training_std_dev, 
-            rho, 
-            gamma, 
-            policy_delay, 
-            write_to_csv, 
+            env_args,
+            hidden_dims,
+            num_epochs,
+            mini_batch_size,
+            training_std_dev,
+            rho,
+            gamma,
+            policy_delay,
+            write_to_csv,
             device_id,
-            )
+        )
 
-        self.actor = ActorMLP(
-            self.actor_shape,learning_rate,device_id=device_id
-        )
-        self.critic_1 = CriticMLP(
-            self.critic_shape, learning_rate, device_id= device_id
-        )
-        self.critic_2 = CriticMLP(
-            self.critic_shape, learning_rate, device_id= device_id
-        )
+        self.actor = ActorMLP(self.actor_shape, learning_rate, device_id=device_id)
+        self.critic_1 = CriticMLP(self.critic_shape, learning_rate, device_id=device_id)
+        self.critic_2 = CriticMLP(self.critic_shape, learning_rate, device_id=device_id)
         self.target_critic_1 = CriticMLP(
-            self.critic_shape, learning_rate, device_id= device_id
+            self.critic_shape, learning_rate, device_id=device_id
         )
         self.target_critic_2 = CriticMLP(
-            self.critic_shape, learning_rate, device_id= device_id
+            self.critic_shape, learning_rate, device_id=device_id
         )
         self.initialize_target_parameters()
+
 
 class SACAgentLSTM(SACAgent):
     def __init__(
-        self, 
-        env_args: Dict, 
-        hidden_dim: int = 128, 
-        learning_rate = 3e-4,
-        num_epochs: int = 1, 
-        mini_batch_size: int = 100, 
-        training_std_dev: float = 0.2, 
-        rho: float = 0.005, 
-        gamma: float = 0.99, 
-        policy_delay: int = 2, 
-        write_to_csv: bool = True, 
-        device_id: int = 0
-        ) -> None:
+        self,
+        env_args: Dict,
+        hidden_dim: int = 128,
+        learning_rate=3e-4,
+        num_epochs: int = 1,
+        mini_batch_size: int = 100,
+        training_std_dev: float = 0.2,
+        rho: float = 0.005,
+        gamma: float = 0.99,
+        policy_delay: int = 2,
+        write_to_csv: bool = True,
+        device_id: int = 0,
+    ) -> None:
         hidden_dims = (hidden_dim,)
         super().__init__(
-            env_args, 
-            hidden_dims, 
-            num_epochs, 
-            mini_batch_size, 
-            training_std_dev, 
-            rho, 
-            gamma, 
-            policy_delay, 
-            write_to_csv, 
-            device_id
-            )
+            env_args,
+            hidden_dims,
+            num_epochs,
+            mini_batch_size,
+            training_std_dev,
+            rho,
+            gamma,
+            policy_delay,
+            write_to_csv,
+            device_id,
+        )
         self.actor = ActorLSTM(
-            self.actor_shape,learning_rate=learning_rate ,device_id=device_id
+            self.actor_shape, learning_rate=learning_rate, device_id=device_id
         )
         self.critic_1 = CriticLSTM(
-            self.critic_shape, learning_rate, device_id= device_id
+            self.critic_shape, learning_rate, device_id=device_id
         )
         self.critic_2 = CriticLSTM(
-            self.critic_shape, learning_rate, device_id= device_id
+            self.critic_shape, learning_rate, device_id=device_id
         )
         self.target_critic_1 = CriticLSTM(
-            self.critic_shape, learning_rate, device_id= device_id
+            self.critic_shape, learning_rate, device_id=device_id
         )
         self.target_critic_2 = CriticLSTM(
-            self.critic_shape, learning_rate, device_id= device_id
+            self.critic_shape, learning_rate, device_id=device_id
         )
         self.initialize_target_parameters()
-
