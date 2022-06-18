@@ -25,7 +25,7 @@ class Critic(GenericNetwork):
         retain_graph=False,
     ) -> None:
         loss = self.compute_loss(states, actions, targets)
-        self.gradient_descent_step(loss)
+        self.gradient_descent_step(loss, retain_graph=retain_graph)
 
     def compute_loss(
         self,
