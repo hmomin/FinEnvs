@@ -7,6 +7,7 @@ from .continuous_actor import ContinuousActor, ContinuousActorLSTM, ContinuousAc
 from .critic import Critic, CriticLSTM, CriticMLP
 from datetime import datetime
 from ...device_utils import set_device
+from pprint import pprint
 from time import time
 from typing import Tuple, Dict
 
@@ -19,6 +20,7 @@ class PPOAgent(BaseObject):
         num_mini_batches: int,
         hidden_dims: Tuple[int],
         gamma: float = 0.99,
+        model_save_interval: int = 20,
         write_to_csv: bool = True,
         device_id: int = 0,
     ):
@@ -35,7 +37,10 @@ class PPOAgent(BaseObject):
         )
         self.evaluation_return = None
         self.num_samples = 0
+        self.num_steps = 0
+        self.save_interval = model_save_interval
         self.write_to_csv = write_to_csv
+        self.designate_trials_dir()
         if write_to_csv:
             self.create_progress_log()
         self.actor: ContinuousActor = None
@@ -59,14 +64,23 @@ class PPOAgent(BaseObject):
         self.actor_shape = (self.num_observations, *hidden_dims, self.num_actions)
         self.critic_shape = (self.num_observations, *hidden_dims, 1)
 
-    def create_progress_log(self) -> None:
-        trials_dir = os.path.join(os.getcwd(), "trials")
-        if not os.path.exists(trials_dir):
-            os.mkdir(trials_dir)
+    def designate_trials_dir(self) -> None:
+        timestamped_name = datetime.now().strftime(
+            f"{self.env_name}_PPO_%Y-%m-%d_%H-%M-%S"
+        )
+        trials_dir = os.path.join(os.getcwd(), "trials", timestamped_name)
+        self.trials_dir = trials_dir
         self.csv_name = os.path.join(
             trials_dir,
-            datetime.now().strftime(f"{self.env_name}_PPO_%Y-%m-%d_%H-%M-%S.csv"),
+            f"{timestamped_name}.csv",
         )
+
+    def create_trials_dir(self) -> None:
+        if not os.path.exists(self.trials_dir):
+            os.mkdir(self.trials_dir)
+
+    def create_progress_log(self) -> None:
+        self.create_trials_dir()
         csv_fields = [
             "unix_time",
             "num_training_samples",
@@ -122,6 +136,10 @@ class PPOAgent(BaseObject):
 
     def log_progress(self) -> bool:
         self.num_samples += self.get_buffer_size()
+        self.num_steps += 1
+        if self.save_interval > 0 and self.num_steps % self.save_interval == 0:
+            self.create_trials_dir()
+            self.save_model()
         if self.evaluation_return == None:
             return False
         evaluation_return = self.evaluation_return
@@ -180,6 +198,14 @@ class PPOAgent(BaseObject):
         self.buffer.clear()
         return self.num_samples if progress_logged else 0
 
+    def save_model(self) -> None:
+        saved_model_path = os.path.join(
+            self.trials_dir, f"{self.env_name}_PPO_{self.num_steps}.pth"
+        )
+        torch.save(self.actor.state_dict(), saved_model_path)
+        # FIXME: note that model can be loaded with:
+        # self.actor.load_state_dict(torch.load(saved_model_path))
+
 
 class PPOAgentMLP(PPOAgent):
     def __init__(
@@ -193,6 +219,7 @@ class PPOAgentMLP(PPOAgent):
         clip_epsilon: float = 0.2,
         entropy_coefficient: float = 0.01,
         gamma: float = 0.99,
+        model_save_interval: int = 20,
         write_to_csv: bool = True,
         device_id: int = 0,
     ):
@@ -202,6 +229,7 @@ class PPOAgentMLP(PPOAgent):
             num_mini_batches=num_mini_batches,
             hidden_dims=hidden_dims,
             gamma=gamma,
+            model_save_interval=model_save_interval,
             write_to_csv=write_to_csv,
             device_id=device_id,
         )
@@ -228,6 +256,7 @@ class PPOAgentLSTM(PPOAgent):
         clip_epsilon: float = 0.2,
         entropy_coefficient: float = 0.01,
         gamma: float = 0.99,
+        model_save_interval: int = 20,
         write_to_csv: bool = True,
         device_id: int = 0,
     ):
@@ -238,6 +267,7 @@ class PPOAgentLSTM(PPOAgent):
             num_mini_batches=num_mini_batches,
             hidden_dims=hidden_dims,
             gamma=gamma,
+            model_save_interval=model_save_interval,
             write_to_csv=write_to_csv,
             device_id=device_id,
         )
