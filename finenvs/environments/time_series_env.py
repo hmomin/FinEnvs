@@ -350,7 +350,7 @@ class TimeSeriesEnv(BaseObject):
         positive_share_changes -= buy_back_shares
         self.increment_commissions(buy_back_shares)
         self.cash -= buy_back_shares * (
-            self.current_open_prices - self.per_share_commission
+            self.current_open_prices + self.per_share_commission
         )
         self.short_shares = new_short_shares
         new_margin = (
