@@ -35,14 +35,14 @@ class Critic(GenericNetwork):
     ) -> torch.Tensor:
         inputs = torch.cat([states, actions], dim=1)
         state_action_values = self.forward(inputs)
-        mean_square_error = (state_action_values - targets).square().mean().detach()
-        return mean_square_error.requires_grad_(True)
+        mean_square_error = (state_action_values - targets).square().mean()
+        return mean_square_error
 
     def gradient_descent_step(
         self, loss: torch.Tensor, retain_graph: bool = False
     ) -> None:
         self.optimizer.zero_grad()
-        loss.backward()
+        loss.backward(retain_graph=retain_graph)
         self.optimizer.step()
 
 

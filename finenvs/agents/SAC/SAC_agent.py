@@ -114,12 +114,14 @@ class SACAgent(BaseObject):
         self,
         states: torch.Tensor,
     ) -> torch.Tensor:
-        actions = self.actor.get_actions_and_log_probs(states)[0]
+        dist = self.actor.get_distribution(states)
+        normal_action = dist.rsample()
+        actions = torch.tanh(normal_action).detach()
         # The last environiment is an "evaluation" environiment, so it should strictly
         # use the means of the distribution
         evaluation_state = states[-1]
-        evaluation_action = self.actor.forward(evaluation_state).detach()
-        actions[-1] = evaluation_action
+        evaluation_action = torch.tanh(self.actor.forward(evaluation_state).detach())
+        actions[-1, :] = evaluation_action
         return actions
 
     def store(
@@ -243,7 +245,7 @@ class SACAgentMLP(SACAgent):
     def __init__(
         self,
         env_args: Dict,
-        hidden_dims: Tuple[int] = (128, 128),
+        hidden_dims: Tuple[int] = (3, 3),
         learning_rate: float = 3e-4,
         num_epochs: int = 1,
         mini_batch_size: int = 100,

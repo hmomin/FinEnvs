@@ -56,6 +56,10 @@ class Actor(GenericNetwork):
 
     def get_actions_and_log_probs(self, states: torch.Tensor):
         distribution = self.get_distribution(states)
+        # mean = self.forward(states)
+        # std_dev = torch.exp(self.log_std_dev)
+        # std_dev = torch.clamp(std_dev, self.min_std_dev, self.max_std_dev)
+        # distribution = Normal(mean, std_dev)
         normal_action = distribution.rsample()
         log_probs = distribution.log_prob(normal_action)
         reparameterised_actions = torch.tanh(normal_action)
@@ -78,8 +82,8 @@ class Actor(GenericNetwork):
         loss = -min_state_action_val - entropy
         alpha_loss = -(
             self.log_alpha.exp() * (log_probs + self.target_entropy).detach()
-        ).mean()
-        return loss.mean(), alpha_loss
+        )
+        return loss.mean(), alpha_loss.mean()
 
     def gradient_descent_step(
         self,
@@ -113,7 +117,7 @@ class ActorMLP(MLPNetwork, Actor):
         max_std_dev=1,
         epsilon=1e-7,
         alpha=0.01,
-        alpha_learning_rate=0.001,
+        alpha_learning_rate=3e-4,
         target_entropy=-1.0,
         starting_std_dev=1.0,
         layer_activation=nn.ELU,
