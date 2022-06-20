@@ -3,8 +3,8 @@ from finenvs.agents.PPO.PPO_agent import PPOAgentMLP
 from finenvs.environments.time_series_env import TimeSeriesEnv
 
 
-def train_PPO_MLP_on_training_set(env_name: str):
-    torch.manual_seed(292408520)
+def train_PPO_MLP_on_training_set(env_name: str, seed: int):
+    torch.manual_seed(seed)
     num_envs = 4096
     env = TimeSeriesEnv(
         instrument_name=env_name,
@@ -35,4 +35,4 @@ def train_PPO_MLP_on_training_set(env_name: str):
 
 
 if __name__ == "__main__":
-    train_PPO_MLP_on_training_set("SPY")
+    train_PPO_MLP_on_training_set("SPY", 602585557)
