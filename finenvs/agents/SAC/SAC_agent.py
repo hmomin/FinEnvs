@@ -19,10 +19,9 @@ class SACAgent(BaseObject):
         hidden_dims: Tuple[int],
         num_epochs: int = 1,
         mini_batch_size: int = 100,
-        training_std_dev: float = 0.2,
         rho: float = 0.005,
         gamma: float = 0.99,
-        policy_delay: int = 2,
+        policy_delay: int = 4,
         write_to_csv: bool = True,
         device_id: int = 0,
     ) -> None:
@@ -30,7 +29,6 @@ class SACAgent(BaseObject):
         self.set_env_params(env_args)
         self.num_epochs = num_epochs
         self.mini_batch_size = mini_batch_size
-        self.training_std_dev = training_std_dev
         self.rho = rho
         self.gamma = gamma
         self.policy_delay = policy_delay
@@ -179,6 +177,7 @@ class SACAgent(BaseObject):
         return evaluation_return
 
     def train(self) -> Tuple[int, float]:
+        # self.target_log_alpha = self.actor.log_alpha.detach().clone()
         for _ in range(self.num_epochs):
             mini_batch_dict: Dict[str, torch.Tensor] = self.buffer.get_mini_batch(
                 self.mini_batch_size
@@ -196,6 +195,7 @@ class SACAgent(BaseObject):
             if self.training_steps % self.policy_delay == 0:
                 self.actor.update(states, self.critic_1, self.critic_2)
                 self.update_target_networks()
+                # self.target_log_alpha = self.actor.log_alpha.detach().clone()
         evaluation_return = self.log_progress()
         self.training_steps += 1
         return (
@@ -210,20 +210,22 @@ class SACAgent(BaseObject):
         next_states: torch.Tensor,
         dones: torch.Tensor,
     ) -> torch.Tensor:
-        actions, log_probs = self.actor.get_actions_and_log_probs(next_states)
-        next_state_action_value_1 = self.target_critic_1.forward(
-            torch.cat([next_states, actions], dim=1)
-        )
-        next_state_action_value_2 = self.target_critic_2.forward(
-            torch.cat([next_states, actions], dim=1)
-        )
-        min_state_action_value = torch.min(
-            next_state_action_value_1, next_state_action_value_2
-        )
-        entropy = self.actor.log_alpha.exp() * log_probs
-        target = rewards + (self.gamma) * (1 - dones) * (
-            min_state_action_value - entropy
-        )
+        with torch.no_grad():
+            actions, log_probs = self.actor.get_actions_and_log_probs(next_states)
+            next_state_action_value_1 = self.target_critic_1.forward(
+                torch.cat([next_states, actions], dim=1)
+            )
+            next_state_action_value_2 = self.target_critic_2.forward(
+                torch.cat([next_states, actions], dim=1)
+            )
+            min_state_action_value = torch.min(
+                next_state_action_value_1, next_state_action_value_2
+            )
+            entropy = self.actor.log_alpha.exp() * log_probs
+            # entropy = self.target_log_alpha.exp()*log_probs
+            target = rewards + (self.gamma) * (1 - dones) * (
+                min_state_action_value - entropy
+            )
         return target
 
     def update_target_networks(self) -> None:
@@ -249,7 +251,6 @@ class SACAgentMLP(SACAgent):
         learning_rate: float = 3e-4,
         num_epochs: int = 1,
         mini_batch_size: int = 100,
-        training_std_dev: float = 0.2,
         rho: float = 0.005,
         gamma: float = 0.99,
         policy_delay: int = 2,
@@ -261,7 +262,6 @@ class SACAgentMLP(SACAgent):
             hidden_dims,
             num_epochs,
             mini_batch_size,
-            training_std_dev,
             rho,
             gamma,
             policy_delay,
@@ -289,7 +289,6 @@ class SACAgentLSTM(SACAgent):
         learning_rate=3e-4,
         num_epochs: int = 1,
         mini_batch_size: int = 100,
-        training_std_dev: float = 0.2,
         rho: float = 0.005,
         gamma: float = 0.99,
         policy_delay: int = 2,
@@ -302,7 +301,6 @@ class SACAgentLSTM(SACAgent):
             hidden_dims,
             num_epochs,
             mini_batch_size,
-            training_std_dev,
             rho,
             gamma,
             policy_delay,

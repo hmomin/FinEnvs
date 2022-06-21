@@ -31,20 +31,20 @@ class Actor(GenericNetwork):
         epsilon: float,
         alpha: float,
         alpha_learning_rate: float,
-        target_entropy: float,
     ):
         self.shape = shape
         self.learning_rate = learning_rate
         self.min_std_dev = min_std_dev
         self.max_std_dev = max_std_dev
+        num_actions = shape[-1]
         self.create_optimizer(learning_rate=learning_rate)
         self.epsilon = epsilon
         self.log_alpha = torch.tensor(np.log(alpha))
         self.log_alpha.requires_grad = True
-        self.alpha_optim = Adam([self.log_alpha], alpha_learning_rate)
-        self.target_entropy = target_entropy
+        self.alpha_optim = Adam([self.log_alpha], lr=alpha_learning_rate)
+        self.target_entropy = -num_actions
         self.log_std_dev = nn.Parameter(
-            torch.ones((1, shape[-1]), device=self.device) * np.log(starting_std_dev)
+            torch.ones((1, num_actions), device=self.device) * np.log(starting_std_dev)
         )
 
     def get_distribution(self, states: torch.Tensor):
@@ -56,10 +56,6 @@ class Actor(GenericNetwork):
 
     def get_actions_and_log_probs(self, states: torch.Tensor):
         distribution = self.get_distribution(states)
-        # mean = self.forward(states)
-        # std_dev = torch.exp(self.log_std_dev)
-        # std_dev = torch.clamp(std_dev, self.min_std_dev, self.max_std_dev)
-        # distribution = Normal(mean, std_dev)
         normal_action = distribution.rsample()
         log_probs = distribution.log_prob(normal_action)
         reparameterised_actions = torch.tanh(normal_action)
@@ -118,8 +114,7 @@ class ActorMLP(MLPNetwork, Actor):
         epsilon=1e-7,
         alpha=0.01,
         alpha_learning_rate=3e-4,
-        target_entropy=-1.0,
-        starting_std_dev=1.0,
+        starting_std_dev=0.5,
         layer_activation=nn.ELU,
         output_activation=nn.Tanh,
         device_id: int = 0,
@@ -134,7 +129,6 @@ class ActorMLP(MLPNetwork, Actor):
             epsilon,
             alpha,
             alpha_learning_rate,
-            target_entropy,
         )
 
 
@@ -149,8 +143,7 @@ class ActorLSTM(LSTMNetwork, Actor):
         epsilon=1e-7,
         alpha=0.01,
         alpha_learning_rate=0.001,
-        starting_std_dev=1.0,
-        target_entropy=-1.0,
+        starting_std_dev=0.5,
         device_id: int = 0,
     ):
         super().__init__(shape, output_activation, device_id)
@@ -163,5 +156,4 @@ class ActorLSTM(LSTMNetwork, Actor):
             epsilon,
             alpha,
             alpha_learning_rate,
-            target_entropy,
         )
