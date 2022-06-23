@@ -24,6 +24,7 @@ class TD3Agent(BaseObject):
         rho: float = 0.005,
         gamma: float = 0.99,
         policy_delay: int = 2,
+        model_save_interval: int = 20,
         write_to_csv: bool = True,
         device_id: int = 0,
     ) -> None:
@@ -38,7 +39,8 @@ class TD3Agent(BaseObject):
         self.write_to_csv = write_to_csv
         self.set_network_shapes(hidden_dims)
         self.device = set_device(device_id)
-        self.buffer = Buffer(device_id=device_id)
+        max_size = 250_000 if self.num_observations > 1000 else 1_000_000
+        self.buffer = Buffer(max_size=max_size, device_id=device_id)
         self.training_steps = 0
         self.current_returns = torch.zeros(
             (self.num_envs,), device=self.device, requires_grad=False
@@ -48,6 +50,9 @@ class TD3Agent(BaseObject):
         )
         self.evaluation_return = None
         self.num_samples = 0
+        self.num_steps = 0
+        self.save_interval = model_save_interval
+        self.designate_trials_dir()
         if self.write_to_csv:
             self.create_progress_log()
         self.actor: Actor = None
@@ -94,14 +99,23 @@ class TD3Agent(BaseObject):
                     target_parameter.sub_(target_parameter)
                     target_parameter.add_(parameter)
 
-    def create_progress_log(self) -> None:
-        trials_dir = os.path.join(os.getcwd(), "trials")
-        if not os.path.exists(trials_dir):
-            os.mkdir(trials_dir)
+    def designate_trials_dir(self) -> None:
+        timestamped_name = datetime.now().strftime(
+            f"{self.env_name}_TD3_%Y-%m-%d_%H-%M-%S"
+        )
+        trials_dir = os.path.join(os.getcwd(), "trials", timestamped_name)
+        self.trials_dir = trials_dir
         self.csv_name = os.path.join(
             trials_dir,
-            datetime.now().strftime(f"{self.env_name}_TD3_%Y-%m-%d-%H-%M-%S.csv"),
+            f"{timestamped_name}.csv",
         )
+
+    def create_trials_dir(self) -> None:
+        if not os.path.exists(self.trials_dir):
+            os.mkdir(self.trials_dir)
+
+    def create_progress_log(self) -> None:
+        self.create_trials_dir()
         csv_fields = [
             "unix_time",
             "num_training_samples",
@@ -125,7 +139,7 @@ class TD3Agent(BaseObject):
         # the last environment is an "evaluation" environment, so it should strictly
         # use the means of the distribution
         evaluation_state = states[-1]
-        evaluation_action = self.actor.forward(evaluation_state).detach()
+        evaluation_action = self.actor.forward(evaluation_state.float()).detach()
         actions[-1, :] = evaluation_action
         return actions
 
@@ -153,6 +167,10 @@ class TD3Agent(BaseObject):
 
     def log_progress(self) -> float:
         self.num_samples += self.num_envs
+        self.num_steps += 1
+        if self.save_interval > 0 and self.num_steps % self.save_interval == 0:
+            self.create_trials_dir()
+            self.save_model()
         if self.evaluation_return == None:
             return None
         evaluation_return = self.evaluation_return
@@ -212,14 +230,15 @@ class TD3Agent(BaseObject):
     def compute_targets(
         self, rewards: torch.Tensor, next_states: torch.Tensor, dones: torch.Tensor
     ) -> torch.Tensor:
-        target_actions: torch.Tensor = self.target_actor.forward(next_states)
+        float_next_states = next_states.float()
+        target_actions: torch.Tensor = self.target_actor.forward(float_next_states)
         noise = (
             torch.randn(target_actions.shape, device=self.device)
             * self.training_std_dev
         )
         clipped_noise = torch.clamp(noise, -self.traning_clip, +self.traning_clip)
         target_actions = torch.clamp(target_actions + clipped_noise, -1, +1)
-        inputs = torch.cat([next_states, target_actions], dim=1)
+        inputs = torch.cat([float_next_states, target_actions], dim=1)
         target_state_action_values_1 = self.target_critic_1.forward(inputs)
         target_state_action_values_2 = self.target_critic_2.forward(inputs)
         target_state_action_values = torch.minimum(
@@ -240,6 +259,12 @@ class TD3Agent(BaseObject):
                 target_param.data * (1.0 - self.rho) + param.data * self.rho
             )
 
+    def save_model(self) -> None:
+        saved_model_path = os.path.join(
+            self.trials_dir, f"{self.env_name}_TD3_{self.num_steps}.pth"
+        )
+        torch.save(self.actor.state_dict(), saved_model_path)
+
 
 class TD3AgentMLP(TD3Agent):
     def __init__(
@@ -255,6 +280,7 @@ class TD3AgentMLP(TD3Agent):
         rho: float = 0.005,
         gamma: float = 0.99,
         policy_delay: int = 2,
+        model_save_interval: int = 20,
         write_to_csv: bool = True,
         device_id: int = 0,
     ) -> None:
@@ -268,6 +294,7 @@ class TD3AgentMLP(TD3Agent):
             rho=rho,
             gamma=gamma,
             policy_delay=policy_delay,
+            model_save_interval=model_save_interval,
             write_to_csv=write_to_csv,
             device_id=device_id,
         )
@@ -302,6 +329,7 @@ class TD3AgentLSTM(TD3Agent):
         rho: float = 0.005,
         gamma: float = 0.99,
         policy_delay: int = 2,
+        model_save_interval: int = 20,
         write_to_csv: bool = True,
         device_id: int = 0,
     ):
@@ -316,6 +344,7 @@ class TD3AgentLSTM(TD3Agent):
             rho=rho,
             gamma=gamma,
             policy_delay=policy_delay,
+            model_save_interval=model_save_interval,
             write_to_csv=write_to_csv,
             device_id=device_id,
         )
