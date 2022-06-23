@@ -3,6 +3,7 @@ import numpy as np
 import os
 import pandas as pd
 import torch
+from ..agents.PPO.continuous_actor import ContinuousActorMLP
 from ..base_object import BaseObject
 from ..device_utils import set_device
 from glob import glob
@@ -25,6 +26,7 @@ class TimeSeriesEnv(BaseObject):
         # is a good resource for information on margin requirements.
         initial_margin_requirement: float = 1.5,
         maintenance_margin_requirement: float = 0.25,
+        evaluate: bool = False,
         device_id: int = 0,
     ):
         self.instrument_name = instrument_name
@@ -39,6 +41,7 @@ class TimeSeriesEnv(BaseObject):
         self.data_dir_name = self.get_data_dir_name(instrument_name)
         self.file_key = self.determine_file_key(dataset_key)
         self.filename = self.find_file_by_key()
+        self.evaluate = evaluate
         self.device = set_device(device_id)
         self.process_data(self.filename)
         self.set_spaces()
@@ -242,10 +245,20 @@ class TimeSeriesEnv(BaseObject):
         }
 
     def set_environment_params(self) -> None:
-        self.env_indices = torch.randint(
-            0, self.price_environments.shape[0], (self.num_envs,), device=self.device
-        )
-        self.env_indices[-1] = 0
+        if self.evaluate:
+            self.env_indices = torch.arange(
+                0, self.price_environments.shape[0], 1, device=self.device
+            )
+            self.num_envs = self.price_environments.shape[0]
+            self.reset_evaluation_metrics()
+        else:
+            self.env_indices = torch.randint(
+                0,
+                self.price_environments.shape[0],
+                (self.num_envs,),
+                device=self.device,
+            )
+            self.env_indices[-1] = 0
         self.env_pointers = torch.zeros(
             (self.num_envs,), dtype=torch.int64, device=self.device
         )
@@ -258,6 +271,12 @@ class TimeSeriesEnv(BaseObject):
         self.long_shares = torch.zeros((self.num_envs, 1), device=self.device)
         self.short_shares = torch.zeros((self.num_envs, 1), device=self.device)
         self.margin = torch.zeros((self.num_envs, 1), device=self.device)
+
+    def reset_evaluation_metrics(self) -> None:
+        self.terminated_episodes = torch.zeros(
+            (self.num_envs,), dtype=torch.bool, device=self.device
+        )
+        self.episode_returns = torch.zeros((self.num_envs,), device=self.device)
 
     def step(
         self, actions: torch.Tensor
@@ -273,7 +292,12 @@ class TimeSeriesEnv(BaseObject):
         num_shares = self.short_shares + self.long_shares
         rewards -= dones * num_shares * self.per_share_commission
         self.reset_finished_environments(dones)
-        return (new_states, rewards.squeeze(), dones.int().squeeze(), {})
+        rewards = rewards.squeeze(1)
+        dones = dones.squeeze(1)
+        info_dict = (
+            self.record_evaluation_metrics(rewards, dones) if self.evaluate else {}
+        )
+        return (new_states, rewards, dones.int(), info_dict)
 
     def get_share_changes_from_actions(self, actions: torch.Tensor) -> torch.Tensor:
         scaled_actions = actions * (self.max_shares + 0.5)
@@ -307,7 +331,7 @@ class TimeSeriesEnv(BaseObject):
         current_index_spots = last_price_spots.repeat(1, 4).unsqueeze(1)
         current_prices = torch.gather(
             current_price_environments, dim=1, index=current_index_spots
-        ).squeeze()
+        ).squeeze(1)
         self.current_open_prices = torch.select(current_prices, 1, 0).view(
             self.num_envs, 1
         )
@@ -459,19 +483,19 @@ class TimeSeriesEnv(BaseObject):
         max_length = current_environments.shape[1]
         next_spots = (self.env_spots[:, -1] + 1).unsqueeze(-1)
         self.dones = torch.logical_or(self.dones, next_spots >= max_length)
-        next_spots = next_spots.squeeze()
+        next_spots = next_spots.squeeze(1)
         self.find_nan_spots(next_spots)
         return self.dones
 
     def find_nan_spots(self, next_spots: torch.Tensor) -> None:
-        not_dones = ~self.dones.squeeze()
+        not_dones = ~self.dones.squeeze(1)
         not_done_indices = not_dones.nonzero()
         env_indices_to_check = self.env_indices[not_dones]
         spots_to_check = next_spots[not_dones]
         unchecked_envs = self.log_return_environments[env_indices_to_check, :, :]
         spots_to_check = spots_to_check.unsqueeze(-1).unsqueeze(-1)
         next_open_values = torch.gather(unchecked_envs, dim=1, index=spots_to_check)
-        nan_spots = torch.isnan(next_open_values).squeeze()
+        nan_spots = torch.isnan(next_open_values).squeeze(2).squeeze(1)
         nans_found = not_done_indices[nan_spots]
         self.dones[nans_found] = True
 
@@ -481,18 +505,19 @@ class TimeSeriesEnv(BaseObject):
         self.long_shares[dones] = 0
         self.short_shares[dones] = 0
         horizontal_dones = dones.view(self.num_envs)
-        last_env_index = self.env_indices[-1].item()
-        num_envs = self.price_environments.shape[0]
-        self.env_indices[horizontal_dones] = torch.randint(
-            0,
-            num_envs,
-            self.env_indices[horizontal_dones].shape,
-            device=self.device,
-        )
-        # the last environment should be reserved for evaluation purposes: it'll cycle
-        # through each of the days in sequence, instead of choosing randomly
-        if horizontal_dones[-1].item():
-            self.env_indices[-1] = (last_env_index + 1) % num_envs
+        if not self.evaluate:
+            last_env_index = self.env_indices[-1].item()
+            num_envs = self.price_environments.shape[0]
+            self.env_indices[horizontal_dones] = torch.randint(
+                0,
+                num_envs,
+                self.env_indices[horizontal_dones].shape,
+                device=self.device,
+            )
+            # the last environment should be reserved for evaluation purposes: it'll
+            # cycle through each of the days in sequence, instead of choosing randomly
+            if horizontal_dones[-1].item():
+                self.env_indices[-1] = (last_env_index + 1) % num_envs
         self.env_pointers[horizontal_dones] = 0
         starting_spots = self.env_spots[:, 0]
         env_spot_deltas = torch.zeros(
@@ -501,3 +526,38 @@ class TimeSeriesEnv(BaseObject):
         env_spot_deltas[horizontal_dones] = starting_spots[horizontal_dones]
         env_spot_deltas = env_spot_deltas.unsqueeze(-1).repeat(1, self.num_intervals)
         self.env_spots -= env_spot_deltas
+
+    def record_evaluation_metrics(
+        self, rewards: torch.Tensor, dones: torch.Tensor
+    ) -> Dict:
+        # ignore rewards from terminated episodes
+        terminated_indices = self.terminated_episodes.nonzero()
+        rewards[terminated_indices] = 0
+        self.terminated_episodes[dones] = True
+        self.episode_returns += rewards
+        if torch.all(self.terminated_episodes):
+            info_dict = {"returns": self.episode_returns}
+            self.reset_evaluation_metrics()
+            return info_dict
+        else:
+            return {}
+
+    def evaluate_PPO(self, network: ContinuousActorMLP) -> float:
+        starting_balance = 10_000
+        states = self.reset()
+        evaluation_return = None
+        day_counter = 0
+        num_days = len(self.price_environments)
+        while day_counter < num_days:
+            actions = network.forward(states.float()).detach()
+            (next_states, rewards, dones, _) = self.step(actions)
+            if evaluation_return is None:
+                evaluation_return = rewards
+            else:
+                evaluation_return += rewards
+            if dones[0] > 0:
+                day_counter += 1
+                self.starting_balance = starting_balance + evaluation_return.item()
+                self.cash[:] = evaluation_return + starting_balance
+            states = next_states
+        return evaluation_return
