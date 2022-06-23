@@ -39,7 +39,7 @@ class Actor(GenericNetwork):
         return clamped_noisy_actions
 
     def get_deterministic_actions(self, inputs: torch.Tensor) -> torch.Tensor:
-        actions: torch.Tensor = self.forward(inputs).detach()
+        actions: torch.Tensor = self.forward(inputs.float()).detach()
         return actions
 
     def update(self, states: torch.Tensor, critic: Critic) -> None:
@@ -47,8 +47,9 @@ class Actor(GenericNetwork):
         self.gradient_descent_step(loss)
 
     def compute_loss(self, states: torch.Tensor, critic: Critic) -> torch.Tensor:
-        actions: torch.Tensor = self.forward(states)
-        inputs = torch.cat([states, actions], dim=1)
+        float_states = states.float()
+        actions: torch.Tensor = self.forward(float_states)
+        inputs = torch.cat([float_states, actions], dim=1)
         state_action_values: torch.Tensor = critic.forward(inputs)
         return -state_action_values.mean()
 

@@ -30,7 +30,7 @@ class Critic(GenericNetwork):
     def compute_loss(
         self, states: torch.Tensor, actions: torch.Tensor, targets: torch.Tensor
     ) -> torch.Tensor:
-        inputs = torch.cat([states, actions], dim=1)
+        inputs = torch.cat([states.float(), actions], dim=1)
         state_action_values: torch.Tensor = self.forward(inputs)
         mean_square_error = (state_action_values - targets).square().mean()
         return mean_square_error
