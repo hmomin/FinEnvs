@@ -541,23 +541,3 @@ class TimeSeriesEnv(BaseObject):
             return info_dict
         else:
             return {}
-
-    def evaluate_PPO(self, network: ContinuousActorMLP) -> float:
-        starting_balance = 10_000
-        states = self.reset()
-        evaluation_return = None
-        day_counter = 0
-        num_days = len(self.price_environments)
-        while day_counter < num_days:
-            actions = network.forward(states.float()).detach()
-            (next_states, rewards, dones, _) = self.step(actions)
-            if evaluation_return is None:
-                evaluation_return = rewards
-            else:
-                evaluation_return += rewards
-            if dones[0] > 0:
-                day_counter += 1
-                self.starting_balance = starting_balance + evaluation_return.item()
-                self.cash[:] = evaluation_return + starting_balance
-            states = next_states
-        return evaluation_return
