@@ -17,8 +17,8 @@ class Buffer(BaseObject):
         }
 
     def force_2D(self, tensor: torch.Tensor) -> torch.Tensor:
-        if len(tensor.shape) < 2:
-            tensor = torch.unsqueeze(tensor, -1)
+        while len(tensor.shape) < 2:
+            tensor = tensor.unsqueeze(-1)
         return tensor
 
     def store_tensor(self, key: str, tensor: torch.Tensor) -> None:
