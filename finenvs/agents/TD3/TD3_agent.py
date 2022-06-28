@@ -152,6 +152,7 @@ class TD3Agent(BaseObject):
         dones: torch.Tensor,
     ) -> None:
         self.buffer.store(states, actions, rewards, next_states, dones)
+        self.num_samples += self.num_envs
         self.current_returns += rewards
         evaluation_done = dones[-1]
         training_dones = dones[:-1]
@@ -166,7 +167,6 @@ class TD3Agent(BaseObject):
         self.current_returns[training_done_indices] = 0
 
     def log_progress(self) -> float:
-        self.num_samples += self.num_envs
         self.num_steps += 1
         if self.save_interval > 0 and self.num_steps % self.save_interval == 0:
             self.create_trials_dir()
