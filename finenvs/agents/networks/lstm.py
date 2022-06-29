@@ -14,9 +14,12 @@ class LSTMNetwork(GenericNetwork):
         self.create_layers(shape, output_activation)
 
     def create_layers(self, shape: tuple, output_activation) -> None:
+        if len(shape) == 2:
+            # just duplicate the last size as the output size
+            shape = tuple([*shape, shape[-1]])
         assert (
             len(shape) == 3
-        ), f"LSTM shape expected have length 3, but shape with length {len(shape)} was given"
+        ), f"LSTM shape expected to have length 3, but shape with length {len(shape)} was given"
         (self.input_size, self.hidden_size, self.output_size) = shape
         self.lstm = nn.LSTM(
             self.input_size, self.hidden_size, 1, batch_first=True, device=self.device
