@@ -22,24 +22,24 @@ class TestActorCritic(unittest.TestCase):
         cls.actions = torch.rand((cls.num_envs, cls.num_actions), device=cls.device)
 
     def test_should_feed_forward_MLP_actor(self):
-        means = self.mlp_actor.forward(self.states)
-        self.assertIsInstance(means, torch.Tensor)
-        self.assertEqual(means.shape, (self.num_envs, self.num_actions))
+        actions = self.mlp_actor.get_actions_and_log_probs(self.states)[0].detach()
+        self.assertIsInstance(actions, torch.Tensor)
+        self.assertEqual(actions.shape, (self.num_envs, self.num_actions))
 
     def test_should_feed_forward_LSTM_actor(self):
-        means = self.lstm_actor.forward(self.states)
-        self.assertIsInstance(means, torch.Tensor)
-        self.assertEqual(means.shape, (self.num_envs, self.num_actions))
+        actions = self.lstm_actor.get_actions_and_log_probs(self.states)[0].detach()
+        self.assertIsInstance(actions, torch.Tensor)
+        self.assertEqual(actions.shape, (self.num_envs, self.num_actions))
 
     def test_should_feed_forward_MLP_critic(self):
-        actions = self.mlp_actor.forward(self.states)
+        actions = self.mlp_actor.get_actions_and_log_probs(self.states)[0].detach()
         state_action_values = torch.cat((self.states, actions), dim=1)
         values = self.mlp_critic.forward(state_action_values)
         self.assertIsInstance(values, torch.Tensor)
         self.assertEqual(values.shape, (self.num_envs, 1))
 
     def test_should_feed_forward_LSTM_critic(self):
-        actions = self.mlp_actor.forward(self.states)
+        actions = self.lstm_actor.get_actions_and_log_probs(self.states)[0].detach()
         state_action_values = torch.cat((self.states, actions), dim=1)
         values = self.lstm_critic.forward(state_action_values)
         self.assertIsInstance(values, torch.Tensor)
