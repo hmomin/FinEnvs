@@ -1,6 +1,10 @@
 .vscode/
 trials*
 
+# NOTE: ignoring csv files and cache json files in financial data directory
+finenvs/data/**/*.json
+finenvs/data/**/*.csv
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
