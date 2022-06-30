@@ -2,12 +2,12 @@ import csv
 import os
 import torch
 from datetime import datetime
-from finenvs.agents.SAC.actor import Actor, ActorLSTM, ActorMLP
-from finenvs.agents.SAC.buffer import Buffer
-from finenvs.agents.SAC.critic import Critic, CriticLSTM, CriticMLP
-from finenvs.agents.networks.generic_network import GenericNetwork
-from finenvs.base_object import BaseObject
-from finenvs.device_utils import set_device
+from .actor import Actor, ActorLSTM, ActorMLP
+from .buffer import Buffer
+from .critic import Critic, CriticLSTM, CriticMLP
+from ..networks.generic_network import GenericNetwork
+from ...base_object import BaseObject
+from ...device_utils import set_device
 from time import time
 from typing import Tuple, Dict
 
@@ -113,7 +113,7 @@ class SACAgent(BaseObject):
         with torch.no_grad():
             dist = self.actor.get_distribution(states)
             normal_action = dist.rsample()
-            actions = torch.tanh(normal_action).detach()
+            actions = torch.tanh(normal_action)
             # The last environiment is an "evaluation" environiment, so it should strictly
             # use the means of the distribution
             actions[-1, :] = dist.loc[-1, :]
@@ -203,19 +203,22 @@ class SACAgent(BaseObject):
         dones: torch.Tensor,
     ) -> torch.Tensor:
         with torch.no_grad():
-            actions, log_probs = self.actor.get_actions_and_log_probs(next_states)
+            next_actions, next_log_probs = self.actor.get_actions_and_log_probs(
+                next_states
+            )
+            mean_log_probs = next_log_probs.mean(dim=1, keepdim=True)
             next_state_action_value_1 = self.target_critic_1.forward(
-                torch.cat([next_states, actions], dim=1)
+                torch.cat([next_states, next_actions], dim=1)
             )
             next_state_action_value_2 = self.target_critic_2.forward(
-                torch.cat([next_states, actions], dim=1)
+                torch.cat([next_states, next_actions], dim=1)
             )
             min_state_action_value = torch.min(
                 next_state_action_value_1, next_state_action_value_2
             )
-            entropy = -self.actor.log_alpha.exp() * log_probs
+            next_entropy = -self.actor.log_alpha.exp() * mean_log_probs
             target = rewards + self.gamma * (1 - dones) * (
-                min_state_action_value - entropy
+                min_state_action_value + next_entropy
             )
         return target
 

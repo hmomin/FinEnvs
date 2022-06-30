@@ -28,7 +28,6 @@ def train_SAC_MLP_on_environiment(env_name: str):
         env_args,
         hidden_dims=(256, 256),
         mini_batch_size=num_envs,
-        starting_alpha=1e-6,
         write_to_csv=False,
     )
     states = env.reset_all()
@@ -44,4 +43,4 @@ def train_SAC_MLP_on_environiment(env_name: str):
 
 
 if __name__ == "__main__":
-    train_SAC_MLP_on_environiment("Humanoid")
+    train_SAC_MLP_on_environiment("Ant")

@@ -5,9 +5,9 @@ from datetime import datetime
 from .actor import Actor, ActorLSTM, ActorMLP
 from .buffer import Buffer
 from .critic import Critic, CriticLSTM, CriticMLP
-from finenvs.agents.networks.generic_network import GenericNetwork
-from finenvs.base_object import BaseObject
-from finenvs.device_utils import set_device
+from ..networks.generic_network import GenericNetwork
+from ...base_object import BaseObject
+from ...device_utils import set_device
 from time import time
 from typing import Tuple, Dict
 

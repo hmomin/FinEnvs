@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
-from finenvs.agents.networks.generic_network import GenericNetwork
-from finenvs.agents.networks.lstm import LSTMNetwork
-from finenvs.agents.networks.multilayer_perceptron import MLPNetwork
+from ..networks.generic_network import GenericNetwork
+from ..networks.lstm import LSTMNetwork
+from ..networks.multilayer_perceptron import MLPNetwork
 
 
 class Critic(GenericNetwork):

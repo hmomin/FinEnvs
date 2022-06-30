@@ -2,12 +2,13 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from finenvs.agents.SAC.critic import Critic
-from finenvs.agents.networks.generic_network import GenericNetwork
-from finenvs.agents.networks.lstm import LSTMNetwork
-from finenvs.agents.networks.multilayer_perceptron import MLPNetwork
+from .critic import Critic
+from ..networks.generic_network import GenericNetwork
+from ..networks.lstm import LSTMNetwork
+from ..networks.multilayer_perceptron import MLPNetwork
 from torch.distributions import Normal
 from torch.optim import Adam
+from typing import Tuple
 
 
 class Actor(GenericNetwork):
@@ -37,7 +38,7 @@ class Actor(GenericNetwork):
             np.log(starting_alpha), device=self.device, requires_grad=True
         )
         self.alpha_optimizer = Adam([self.log_alpha], lr=learning_rate)
-        self.target_entropy = -self.num_actions
+        self.target_entropy: float = -self.num_actions
 
     def get_distribution(self, states: torch.Tensor):
         hiddens: torch.Tensor = self.forward(states)
@@ -46,7 +47,9 @@ class Actor(GenericNetwork):
         distribution = Normal(means, std_devs)
         return distribution
 
-    def get_actions_and_log_probs(self, states: torch.Tensor):
+    def get_actions_and_log_probs(
+        self, states: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         distribution = self.get_distribution(states)
         normal_action = distribution.rsample()
         log_probs = distribution.log_prob(normal_action)
@@ -63,16 +66,17 @@ class Actor(GenericNetwork):
         critic_2: Critic,
     ) -> torch.Tensor:
         actions, log_probs = self.get_actions_and_log_probs(states)
-        entropy = -self.log_alpha.exp() * log_probs
+        mean_log_probs = log_probs.mean(dim=1, keepdim=True)
+        entropy_term = -self.log_alpha.exp() * mean_log_probs
         states_actions = torch.cat([states, actions], dim=1)
         state_action_val_1 = critic_1.forward(states_actions)
         state_action_val_2 = critic_2.forward(states_actions)
         min_state_action_val = torch.min(state_action_val_1, state_action_val_2)
-        loss = -min_state_action_val - entropy
-        alpha_loss = -(
-            self.log_alpha.exp() * (log_probs + self.target_entropy).detach()
-        )
-        return loss.mean(), alpha_loss.mean()
+        loss = -(min_state_action_val + entropy_term).mean()
+        alpha_loss = (
+            -self.log_alpha.exp() * (mean_log_probs + self.target_entropy).detach()
+        ).mean()
+        return loss, alpha_loss
 
     def gradient_descent_step(
         self,

@@ -1,6 +1,6 @@
 import torch
-from finenvs.base_object import BaseObject
-from finenvs.device_utils import set_device
+from ...base_object import BaseObject
+from ...device_utils import set_device
 from typing import Dict
 
 
