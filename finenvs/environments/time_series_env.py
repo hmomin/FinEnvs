@@ -3,13 +3,19 @@ import numpy as np
 import os
 import pandas as pd
 import torch
-from ..agents.PPO.continuous_actor import ContinuousActorMLP
 from ..base_object import BaseObject
 from ..device_utils import set_device
 from glob import glob
 from gym import spaces
 from tqdm import tqdm
 from typing import Dict, Tuple
+
+# FIXME: change environment indices so that they're sequential non-duplicate
+# environments
+
+# FIXME: keep final evaluation environment so that it cycles through all the days(?)
+
+# FIXME: make this environment conducive to LSTM
 
 
 class TimeSeriesEnv(BaseObject):
