@@ -3,14 +3,16 @@ import unittest
 from finenvs.environments.time_series_env import TimeSeriesEnv
 from typing import Dict, Tuple
 
+# FIXME: these tests are out-of-date...
+
 
 class TestSPYTraining(unittest.TestCase):
     @classmethod
     def setUpClass(self):
-        self.num_envs = 1024
-        self.train_env = TimeSeriesEnv("SPY", "train", self.num_envs)
-        self.valid_env = TimeSeriesEnv("SPY", "valid", 1)
-        self.test_env = TimeSeriesEnv("SPY", "test", 1)
+        self.train_env = TimeSeriesEnv("SPY", "train", evaluate=False)
+        self.num_envs = self.train_env.num_envs
+        # self.valid_env = TimeSeriesEnv("SPY", "valid", 1)
+        # self.test_env = TimeSeriesEnv("SPY", "test", 1)
 
     def test_1_should_reset_train_env(self):
         states = self.train_env.reset()

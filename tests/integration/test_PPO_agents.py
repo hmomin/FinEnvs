@@ -6,12 +6,15 @@ from finenvs.environments.isaac_gym_envs.utils.config_utils import (
     get_isaac_gym_env_args,
 )
 
+# FIXME: buffer needs to know that the states are sequence-based
+
 
 class TestPPOAgents(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         self.env_name = "BallBalance"
         self.env_args = get_isaac_gym_env_args(self.env_name)
+        self.sequence_length = self.env_args["sequence_length"]
         self.num_envs = self.env_args["num_envs"]
         self.num_steps = 3
         self.batch_size = self.num_envs
@@ -32,9 +35,13 @@ class TestPPOAgents(unittest.TestCase):
 
     def test_should_step_LSTM_agent_through_the_environment_and_train(self):
         states = self.env.reset()
+        states = states.unsqueeze(1).repeat(1, self.sequence_length, 1)
+        print(states.shape)
         for _ in range(self.num_steps):
             (actions, log_probs, values) = self.lstm_agent.step(states)
             (next_states, rewards, dones, _) = self.env.step(actions)
+            next_states = next_states.unsqueeze(1).repeat(1, self.sequence_length, 1)
+            print(next_states.shape)
             self.lstm_agent.store(states, actions, rewards, dones, log_probs, values)
             states = next_states
             if self.lstm_agent.get_buffer_size() >= self.batch_size:

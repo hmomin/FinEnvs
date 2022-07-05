@@ -6,18 +6,19 @@ from finenvs.environments.isaac_gym_envs.utils.config_utils import (
     get_isaac_gym_env_args,
 )
 
+# FIXME: buffer needs to know that the states are sequence-based
 
 class TestTD3Agents(unittest.TestCase):
     @classmethod
-    def setUpClass(cls) -> None:
-        cls.env_name = "BallBalance"
-        cls.env_args = get_isaac_gym_env_args(cls.env_name)
-        cls.num_envs = cls.env_args["num_envs"]
-        cls.num_steps = 3
-        cls.batch_size = cls.num_envs
-        cls.env = IsaacGymEnv(cls.env_name, cls.num_envs, headless=True)
-        cls.mlp_agent = TD3AgentMLP(cls.env_args, write_to_csv=False)
-        cls.lstm_agent = TD3AgentLSTM(cls.env_args, write_to_csv=False)
+    def setUpClass(self) -> None:
+        self.env_name = "BallBalance"
+        self.env_args = get_isaac_gym_env_args(self.env_name)
+        self.num_envs = self.env_args["num_envs"]
+        self.num_steps = 3
+        self.batch_size = self.num_envs
+        self.env = IsaacGymEnv(self.env_name, self.num_envs, headless=True)
+        self.mlp_agent = TD3AgentMLP(self.env_args, write_to_csv=False)
+        self.lstm_agent = TD3AgentLSTM(self.env_args, write_to_csv=False)
 
     def test_should_step_mlp_environiment_and_train(self):
         states = self.env.reset()

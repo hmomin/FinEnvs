@@ -6,18 +6,19 @@ from finenvs.environments.isaac_gym_envs.utils.config_utils import (
     get_isaac_gym_env_args,
 )
 
+# FIXME: buffer needs to know that the states are sequence-based
 
 class TestSACAgents(unittest.TestCase):
     @classmethod
-    def setUpClass(cls) -> None:
-        cls.env_name = "Cartpole"
-        cls.env_args = get_isaac_gym_env_args(cls.env_name)
-        cls.num_envs = cls.env_args["num_envs"]
-        cls.num_steps = 3
-        cls.batch_size = cls.num_envs
-        cls.env = IsaacGymEnv(cls.env_name, cls.num_envs, headless=True)
-        cls.mlp_agent = SACAgentMLP(cls.env_args, write_to_csv=False)
-        cls.lstm_agent = SACAgentLSTM(cls.env_args, write_to_csv=False)
+    def setUpClass(self) -> None:
+        self.env_name = "Cartpole"
+        self.env_args = get_isaac_gym_env_args(self.env_name)
+        self.num_envs = self.env_args["num_envs"]
+        self.num_steps = 3
+        self.batch_size = self.num_envs
+        self.env = IsaacGymEnv(self.env_name, self.num_envs, headless=True)
+        self.mlp_agent = SACAgentMLP(self.env_args, write_to_csv=False)
+        self.lstm_agent = SACAgentLSTM(self.env_args, write_to_csv=False)
 
     def test_should_step_mlp_environiment_and_train(self):
         states = self.env.reset()
