@@ -10,20 +10,12 @@ from gym import spaces
 from tqdm import tqdm
 from typing import Dict, Tuple
 
-# FIXME: change environment indices so that they're sequential non-duplicate
-# environments
-
-# FIXME: keep final evaluation environment so that it cycles through all the days(?)
-
-# FIXME: make this environment conducive to LSTM
-
 
 class TimeSeriesEnv(BaseObject):
     def __init__(
         self,
         instrument_name: str,
         dataset_key: str = "dummy",
-        num_envs: int = 1,
         num_intervals: int = 390,
         max_shares: int = 5,
         starting_balance: float = 10000,
@@ -36,7 +28,6 @@ class TimeSeriesEnv(BaseObject):
         device_id: int = 0,
     ):
         self.instrument_name = instrument_name
-        self.num_envs = num_envs
         self.num_intervals = num_intervals
         self.max_shares = max_shares
         self.starting_balance = starting_balance
@@ -225,10 +216,9 @@ class TimeSeriesEnv(BaseObject):
         self.log_return_environments = torch.stack(log_return_environment_list, dim=0)
 
     def set_spaces(self) -> None:
-        self.num_price_values = self.num_intervals * self.values_per_interval
-        # observation dimension consists of:
-        # {price data + current position}
-        self.num_obs = self.num_price_values + 1
+        # observation dimension ("input size") consists of:
+        # {log-return values per interval + current position}
+        self.num_obs = self.values_per_interval + 1
         # use a continuous action space and discretize based on max_shares
         self.num_acts = 1
         self.action_space = spaces.Box(
@@ -236,9 +226,10 @@ class TimeSeriesEnv(BaseObject):
             np.ones(self.num_acts) * +1.0,
             dtype=np.float64,
         )
+        # observation space accomodates LSTMs
         self.observation_space = spaces.Box(
-            np.ones(self.num_obs) * -np.inf,
-            np.ones(self.num_obs) * +np.inf,
+            np.ones((self.num_intervals, self.num_obs)) * -np.inf,
+            np.ones((self.num_intervals, self.num_obs)) * +np.inf,
             dtype=np.float64,
         )
 
@@ -248,23 +239,22 @@ class TimeSeriesEnv(BaseObject):
             "num_envs": self.num_envs,
             "num_observations": self.num_obs,
             "num_actions": self.num_acts,
+            "sequence_length": self.num_intervals,
         }
 
     def set_environment_params(self) -> None:
+        self.env_indices = torch.arange(
+            0, self.price_environments.shape[0], 1, device=self.device
+        )
+        self.num_envs = self.env_indices.shape[0]
         if self.evaluate:
-            self.env_indices = torch.arange(
-                0, self.price_environments.shape[0], 1, device=self.device
-            )
-            self.num_envs = self.price_environments.shape[0]
             self.reset_evaluation_metrics()
         else:
-            self.env_indices = torch.randint(
-                0,
-                self.price_environments.shape[0],
-                (self.num_envs,),
-                device=self.device,
+            final_index = torch.randint(
+                0, self.price_environments.shape[0], (1,), device=self.device
             )
-            self.env_indices[-1] = 0
+            self.env_indices = torch.cat([self.env_indices, final_index], dim=0)
+            self.num_envs += 1
         self.env_pointers = torch.zeros(
             (self.num_envs,), dtype=torch.int64, device=self.device
         )
@@ -431,17 +421,17 @@ class TimeSeriesEnv(BaseObject):
         self.short_shares += -negative_share_changes
 
     def reset(self) -> torch.Tensor:
-        raw_log_return_data = self.get_log_return_observations()
-        # flatten for MLP architectures
-        (x, y, z) = raw_log_return_data.shape
-        log_return_data = torch.reshape(raw_log_return_data, (x, y * z))
+        log_return_data = self.get_log_return_observations()
+        (num_envs, sequence_length, input_size) = log_return_data.shape
         if not hasattr(self, "current_close_prices"):
             self.set_current_prices()
         current_positions = (
             self.long_shares - self.short_shares
         ) * self.current_close_prices
         scaled_positions = current_positions / self.starting_balance
-        observation_tensors = torch.cat([log_return_data, scaled_positions], dim=1)
+        scaled_positions = scaled_positions.repeat(1, sequence_length)
+        scaled_positions = scaled_positions.unsqueeze(-1)
+        observation_tensors = torch.cat([log_return_data, scaled_positions], dim=2)
         return observation_tensors
 
     def get_log_return_observations(self) -> torch.Tensor:
@@ -512,18 +502,15 @@ class TimeSeriesEnv(BaseObject):
         self.short_shares[dones] = 0
         horizontal_dones = dones.view(self.num_envs)
         if not self.evaluate:
-            last_env_index = self.env_indices[-1].item()
-            num_envs = self.price_environments.shape[0]
-            self.env_indices[horizontal_dones] = torch.randint(
-                0,
-                num_envs,
-                self.env_indices[horizontal_dones].shape,
-                device=self.device,
-            )
-            # the last environment should be reserved for evaluation purposes: it'll
-            # cycle through each of the days in sequence, instead of choosing randomly
+            # NOTE: the last environment should be reserved for evaluation purposes
+            # while training, to ensure each day receives training actions with noise,
+            # instead of deterministic actions for evaluation. The last environment can
+            # just be a random day chosen from the dataset...
+            num_days = self.price_environments.shape[0]
             if horizontal_dones[-1].item():
-                self.env_indices[-1] = (last_env_index + 1) % num_envs
+                self.env_indices[-1] = torch.randint(
+                    0, num_days, (1,), device=self.device
+                )
         self.env_pointers[horizontal_dones] = 0
         starting_spots = self.env_spots[:, 0]
         env_spot_deltas = torch.zeros(
