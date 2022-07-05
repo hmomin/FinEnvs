@@ -122,6 +122,7 @@ class ActorLSTM(LSTMNetwork, Actor):
     def __init__(
         self,
         shape: tuple,
+        sequence_length: int,
         learning_rate=3e-4,
         starting_alpha=1.0,
         output_activation=nn.Tanh,
@@ -130,5 +131,5 @@ class ActorLSTM(LSTMNetwork, Actor):
         network_shape = list(shape)
         self.num_actions = network_shape.pop()
         self.output_activation = output_activation
-        super().__init__(network_shape, nn.Identity, device_id)
+        super().__init__(network_shape, sequence_length, nn.Identity, device_id)
         self.set_up_parameters(shape, learning_rate, starting_alpha)

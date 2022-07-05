@@ -101,6 +101,7 @@ class ContinuousActorLSTM(LSTMNetwork, ContinuousActor):
     def __init__(
         self,
         shape: tuple,
+        sequence_length: int,
         learning_rate: float = 3e-4,
         starting_std_dev: float = 1.0,
         clip_epsilon: float = 0.2,
@@ -110,6 +111,7 @@ class ContinuousActorLSTM(LSTMNetwork, ContinuousActor):
     ):
         super().__init__(
             shape=shape,
+            sequence_length=sequence_length,
             output_activation=output_activation,
             device_id=device_id,
         )

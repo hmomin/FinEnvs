@@ -34,4 +34,5 @@ def get_isaac_gym_env_args(env_name: str) -> Dict:
         "num_envs": env_config["numEnvs"],
         "num_observations": env_config["numObservations"],
         "num_actions": env_config["numActions"],
+        "sequence_length": 1,
     }

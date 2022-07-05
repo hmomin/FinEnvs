@@ -54,12 +54,14 @@ class CriticLSTM(LSTMNetwork, Critic):
     def __init__(
         self,
         shape: tuple,
+        sequence_length: int,
         learning_rate: float = 3e-4,
         output_activation=nn.Identity,
         device_id: int = 0,
     ):
         super().__init__(
             shape=shape,
+            sequence_length=sequence_length,
             output_activation=output_activation,
             device_id=device_id,
         )

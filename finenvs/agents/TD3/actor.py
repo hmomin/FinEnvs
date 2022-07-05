@@ -82,12 +82,11 @@ class ActorLSTM(LSTMNetwork, Actor):
     def __init__(
         self,
         shape: tuple,
+        sequence_length: int,
         learning_rate: float = 3e-4,
         standard_deviation: float = 0.1,
         output_activation=nn.Tanh,
         device_id: int = 0,
     ):
-        super().__init__(
-            shape, output_activation=output_activation, device_id=device_id
-        )
+        super().__init__(shape, sequence_length, output_activation, device_id)
         self.set_up_parameters(shape, learning_rate, standard_deviation)

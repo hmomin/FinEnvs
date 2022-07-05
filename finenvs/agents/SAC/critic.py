@@ -60,9 +60,10 @@ class CriticLSTM(LSTMNetwork, Critic):
     def __init__(
         self,
         shape: tuple,
+        sequence_length: int,
         learning_rate=3e-4,
         output_activation=nn.Identity,
         device_id: int = 0,
     ):
-        super().__init__(shape, output_activation, device_id)
+        super().__init__(shape, sequence_length, output_activation, device_id)
         self.create_optimizer(learning_rate)
