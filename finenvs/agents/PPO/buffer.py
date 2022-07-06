@@ -39,7 +39,9 @@ class Buffer(BaseObject):
         log_probs: torch.Tensor,
         values: torch.Tensor,
     ) -> None:
-        self.store_tensor("states", states)
+        # NOTE: states should be unsqueezed to properly handle LSTM states, which
+        # already have a size of 3
+        self.store_tensor("states", states.unsqueeze(1))
         self.store_tensor("actions", actions)
         self.store_tensor("rewards", rewards)
         self.store_tensor("dones", dones)
@@ -55,20 +57,20 @@ class Buffer(BaseObject):
 
     def force_3D(self, tensor: torch.Tensor) -> torch.Tensor:
         if len(tensor.shape) < 2:
-            tensor = torch.unsqueeze(tensor, -1)
+            tensor = tensor.unsqueeze(-1)
         if len(tensor.shape) < 3:
-            tensor = torch.unsqueeze(tensor, 1)
+            tensor = tensor.unsqueeze(1)
         return tensor
 
     def size(self) -> int:
-        states = self.container["states"]
-        if states == None:
+        dones = self.container["dones"]
+        if dones == None:
             return 0
-        elif len(states.shape) == 3:
-            (num_envs, num_steps, num_obs) = states.shape
+        elif len(dones.shape) == 3:
+            (num_envs, num_steps, num_obs) = dones.shape
             return num_envs * num_steps
         else:
-            (total_steps, num_obs) = states.shape
+            (total_steps, num_obs) = dones.shape
             return total_steps
 
     def prepare_training_data(self, current_state_values: torch.Tensor) -> None:
@@ -99,9 +101,11 @@ class Buffer(BaseObject):
 
     def reshape(self) -> None:
         for key, tensor in self.container.items():
-            (num_envs, num_steps, last_dim) = tensor.shape
+            num_envs = tensor.shape[0]
+            num_steps = tensor.shape[1]
+            remaining_dims = tensor.shape[2:]
             self.container[key] = torch.reshape(
-                tensor, (num_envs * num_steps, last_dim)
+                tensor, (num_envs * num_steps, *remaining_dims)
             )
 
     def get_batches(self) -> Dict[str, torch.Tensor]:
@@ -117,7 +121,7 @@ class Buffer(BaseObject):
                 self.size(), device=self.device, requires_grad=False
             )
             for key, tensor in self.container.items():
-                permuted_tensor = tensor[random_indices, :]
+                permuted_tensor = torch.index_select(tensor, 0, random_indices)
                 self.container[key] = permuted_tensor
 
     def get_mini_batch_indices(self) -> "list[torch.Tensor]":
