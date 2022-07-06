@@ -1,18 +1,18 @@
 import torch
 import unittest
-from finenvs.agents.TD3.buffer import Buffer
+from finenvs.agents.off_policy_buffer import Buffer
 from typing import Dict
 
 
 class TestBuffer(unittest.TestCase):
     @classmethod
-    def setUpClass(cls) -> None:
-        cls.num_envs = 512
-        cls.max_size = 10_000
-        cls.num_observations = 24
-        cls.num_actions = 3
-        cls.num_steps = 16
-        cls.buffer = Buffer(cls.max_size)
+    def setUpClass(self) -> None:
+        self.num_envs = 512
+        self.max_size = 10_000
+        self.num_observations = 24
+        self.num_actions = 3
+        self.num_steps = 16
+        self.buffer = Buffer(self.max_size)
 
     def store_sample_data(self):
         states = (

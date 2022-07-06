@@ -1,7 +1,7 @@
 import torch
-from ...base_object import BaseObject
-from ...device_utils import set_device
 from typing import Dict
+from ..base_object import BaseObject
+from ..device_utils import set_device
 
 
 class Buffer(BaseObject):
@@ -54,14 +54,24 @@ class Buffer(BaseObject):
             return dones.shape[0]
 
     def discard_old_data(self):
+        current_size = self.size()
         assert (
-            self.size() > self.max_size
+            current_size > self.max_size
         ), "Attempted to discard old values from buffer that's not at max capacity."
+        excess = current_size - self.max_size
+        new_indices = torch.arange(excess, current_size, 1, device=self.device)
         for key in self.container.keys():
-            self.container[key] = self.container[key][-self.max_size :, :]
+            self.container[key] = torch.index_select(
+                self.container[key], 0, new_indices
+            )
 
     def get_mini_batch(self, size: int) -> Dict[str, torch.Tensor]:
         indices = torch.randint(0, self.size(), (size,), device=self.device)
         keys = self.container.keys()
         values = self.container.values()
-        return dict([(key, value[indices, :]) for key, value in zip(keys, values)])
+        return dict(
+            [
+                (key, torch.index_select(value, 0, indices))
+                for key, value in zip(keys, values)
+            ]
+        )
