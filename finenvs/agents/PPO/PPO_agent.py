@@ -7,7 +7,6 @@ from .continuous_actor import ContinuousActor, ContinuousActorLSTM, ContinuousAc
 from .critic import Critic, CriticLSTM, CriticMLP
 from datetime import datetime
 from ...device_utils import set_device
-from pprint import pprint
 from time import time
 from typing import Tuple, Dict
 
@@ -105,9 +104,7 @@ class PPOAgent(BaseObject):
         actions = torch.clamp(distribution.sample(), -1, +1)
         # the last environment is an "evaluation" environment, so it should strictly
         # use the means of the distribution
-        evaluation_state = float_states[-1]
-        evaluation_action = self.actor.forward(evaluation_state).detach()
-        actions[-1, :] = evaluation_action
+        actions[-1, :] = distribution.loc[-1, :]
         log_probs = distribution.log_prob(actions).detach()
         return (actions, log_probs, values)
 
@@ -182,7 +179,11 @@ class PPOAgent(BaseObject):
             batch_returns = batch_dict["returns"]
             mini_batch_list = self.buffer.get_mini_batch_indices()
             for mini_batch_indices in mini_batch_list:
-                mini_batch_states = batch_states[mini_batch_indices, :]
+                mini_batch_states = (
+                    batch_states[mini_batch_indices, :]
+                    if len(batch_states.shape) == 2
+                    else batch_states[mini_batch_indices, :, :]
+                )
                 mini_batch_actions = batch_actions[mini_batch_indices, :]
                 mini_batch_log_probs = batch_log_probs[mini_batch_indices, :]
                 mini_batch_advantages = batch_advantages[mini_batch_indices, :]
@@ -261,6 +262,7 @@ class PPOAgentLSTM(PPOAgent):
         device_id: int = 0,
     ):
         hidden_dims = (hidden_dim,)
+        self.sequence_length = env_args["sequence_length"]
         super().__init__(
             env_args=env_args,
             num_epochs=num_epochs,
@@ -273,10 +275,13 @@ class PPOAgentLSTM(PPOAgent):
         )
         self.actor = ContinuousActorLSTM(
             self.actor_shape,
+            self.sequence_length,
             learning_rate,
             starting_std_dev,
             clip_epsilon,
             entropy_coefficient,
             device_id=device_id,
         )
-        self.critic = CriticLSTM(self.critic_shape, learning_rate, device_id=device_id)
+        self.critic = CriticLSTM(
+            self.critic_shape, self.sequence_length, learning_rate, device_id=device_id
+        )

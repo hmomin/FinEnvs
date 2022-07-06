@@ -49,17 +49,7 @@ class LSTMNetwork(GenericNetwork):
         assert (
             input_shape[-2] == self.sequence_length
         ), f"Middle dimension of LSTM inputs expected to be sequence length ({self.sequence_length}) - received ({input_shape[-2]})"
-
-        # FIXME: commenting this out for now
-        """
-        # if this is a single batch, we need an extra dimension...
-        if len(input_shape) == 1:
-            lstm_inputs = lstm_inputs.unsqueeze(0)
-        # the sequence length is going to change depending on the environment!
-        lstm_inputs = lstm_inputs.unsqueeze(1)
-        """
-        # NOTE: lstm_inputs has shape: (batch_size, sequence length, input_size)
-        # in the case of TimeSeriesEnv, it would be something like (num_envs, 390, 4)
+        # lstm_inputs has shape: (batch_size, sequence length, input_size)
         lstm_outputs, _ = self.lstm.forward(lstm_inputs)
         # lstm_outputs has shape: (batch_size, sequence_length, hidden_size)
         final_hidden_states = lstm_outputs[:, -1, :]
