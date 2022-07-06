@@ -7,11 +7,10 @@ from typing import Dict, Tuple
 class TestTimeSeriesEnv(unittest.TestCase):
     @classmethod
     def setUpClass(self):
-        self.num_envs = 4
         self.envs = [
-            TimeSeriesEnv("IBM", "dummy", self.num_envs),
-            TimeSeriesEnv("OIH", "dummy", self.num_envs),
-            TimeSeriesEnv("SPY", "dummy", self.num_envs),
+            TimeSeriesEnv("IBM", "dummy"),
+            TimeSeriesEnv("OIH", "dummy"),
+            TimeSeriesEnv("SPY", "dummy"),
         ]
 
     def test_should_reset_envs(self):
@@ -23,7 +22,8 @@ class TestTimeSeriesEnv(unittest.TestCase):
             self.step_helper(env)
 
     def step_helper(self, env: TimeSeriesEnv):
-        actions = torch.rand((self.num_envs, 1), device=env.device) * 2 - 1
+        num_envs = env.num_envs
+        actions = torch.rand((num_envs, 1), device=env.device) * 2 - 1
         step_info: Tuple[torch.Tensor, torch.Tensor, torch.Tensor, Dict] = env.step(
             actions
         )
