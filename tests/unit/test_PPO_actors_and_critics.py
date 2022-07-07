@@ -55,14 +55,14 @@ class TestActorCritic(unittest.TestCase):
         self.assertEqual(values.shape, (self.num_envs, 1))
 
     def test_should_get_MLP_log_probs_of_actions(self):
-        distribution = self.mlp_actor.get_distribution(self.states)
+        distribution = self.mlp_actor.get_distribution(self.states, True)
         actions = distribution.sample()
         log_probs = distribution.log_prob(actions)
         self.assertIsInstance(log_probs, torch.Tensor)
         self.assertEqual(log_probs.shape, (self.num_envs, self.num_actions))
 
     def test_should_get_LSTM_log_probs_of_actions(self):
-        distribution = self.lstm_actor.get_distribution(self.lstm_states)
+        distribution = self.lstm_actor.get_distribution(self.lstm_states, True)
         actions = distribution.sample()
         log_probs = distribution.log_prob(actions)
         self.assertIsInstance(log_probs, torch.Tensor)
