@@ -35,8 +35,12 @@ class ContinuousActor(GenericNetwork):
         )
         self.create_optimizer(learning_rate)
 
-    def get_distribution(self, inputs: torch.Tensor) -> Normal:
+    def get_distribution(
+        self, inputs: torch.Tensor, should_detach: bool = False
+    ) -> Normal:
         means = self.forward(inputs)
+        if should_detach:
+            means = means.detach()
         standard_deviations = torch.exp(self.log_standard_deviation)
         return Normal(means, standard_deviations)
 

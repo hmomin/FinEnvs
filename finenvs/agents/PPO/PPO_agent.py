@@ -100,7 +100,7 @@ class PPOAgent(BaseObject):
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         float_states = states.float()
         values = self.critic.forward(float_states).detach()
-        distribution = self.actor.get_distribution(float_states)
+        distribution = self.actor.get_distribution(float_states, True)
         actions = torch.clamp(distribution.sample(), -1, +1)
         # the last environment is an "evaluation" environment, so it should strictly
         # use the means of the distribution
@@ -204,8 +204,6 @@ class PPOAgent(BaseObject):
             self.trials_dir, f"{self.env_name}_PPO_{self.num_steps}.pth"
         )
         torch.save(self.actor.state_dict(), saved_model_path)
-        # FIXME: note that model can be loaded with:
-        # self.actor.load_state_dict(torch.load(saved_model_path))
 
 
 class PPOAgentMLP(PPOAgent):
