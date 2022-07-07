@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from .critic import Critic
+from ..agent_utils import match_actions_dim_with_states
 from ..networks.generic_network import GenericNetwork
 from ..networks.multilayer_perceptron import MLPNetwork
 from ..networks.lstm import LSTMNetwork
@@ -49,7 +50,8 @@ class Actor(GenericNetwork):
     def compute_loss(self, states: torch.Tensor, critic: Critic) -> torch.Tensor:
         float_states = states.float()
         actions: torch.Tensor = self.forward(float_states)
-        inputs = torch.cat([float_states, actions], dim=1)
+        actions, concat_dim = match_actions_dim_with_states(float_states, actions)
+        inputs = torch.cat([float_states, actions], dim=concat_dim)
         state_action_values: torch.Tensor = critic.forward(inputs)
         return -state_action_values.mean()
 

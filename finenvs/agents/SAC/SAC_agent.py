@@ -3,8 +3,9 @@ import os
 import torch
 from datetime import datetime
 from .actor import Actor, ActorLSTM, ActorMLP
-from .buffer import Buffer
 from .critic import Critic, CriticLSTM, CriticMLP
+from ..agent_utils import match_actions_dim_with_states
+from ..off_policy_buffer import Buffer
 from ..networks.generic_network import GenericNetwork
 from ...base_object import BaseObject
 from ...device_utils import set_device
@@ -207,11 +208,14 @@ class SACAgent(BaseObject):
                 next_states
             )
             mean_log_probs = next_log_probs.mean(dim=1, keepdim=True)
+            next_actions, concat_dim = match_actions_dim_with_states(
+                next_states, next_actions
+            )
             next_state_action_value_1 = self.target_critic_1.forward(
-                torch.cat([next_states, next_actions], dim=1)
+                torch.cat([next_states, next_actions], dim=concat_dim)
             )
             next_state_action_value_2 = self.target_critic_2.forward(
-                torch.cat([next_states, next_actions], dim=1)
+                torch.cat([next_states, next_actions], dim=concat_dim)
             )
             min_state_action_value = torch.min(
                 next_state_action_value_1, next_state_action_value_2
@@ -291,6 +295,7 @@ class SACAgentLSTM(SACAgent):
         device_id: int = 0,
     ) -> None:
         hidden_dims = (hidden_dim,)
+        self.sequence_length = env_args["sequence_length"]
         super().__init__(
             env_args,
             hidden_dims,
@@ -302,18 +307,22 @@ class SACAgentLSTM(SACAgent):
             device_id,
         )
         self.actor = ActorLSTM(
-            self.actor_shape, learning_rate, starting_alpha, device_id=device_id
+            self.actor_shape,
+            self.sequence_length,
+            learning_rate,
+            starting_alpha,
+            device_id=device_id,
         )
         self.critic_1 = CriticLSTM(
-            self.critic_shape, learning_rate, device_id=device_id
+            self.critic_shape, self.sequence_length, learning_rate, device_id=device_id
         )
         self.critic_2 = CriticLSTM(
-            self.critic_shape, learning_rate, device_id=device_id
+            self.critic_shape, self.sequence_length, learning_rate, device_id=device_id
         )
         self.target_critic_1 = CriticLSTM(
-            self.critic_shape, learning_rate, device_id=device_id
+            self.critic_shape, self.sequence_length, learning_rate, device_id=device_id
         )
         self.target_critic_2 = CriticLSTM(
-            self.critic_shape, learning_rate, device_id=device_id
+            self.critic_shape, self.sequence_length, learning_rate, device_id=device_id
         )
         self.initialize_target_parameters()

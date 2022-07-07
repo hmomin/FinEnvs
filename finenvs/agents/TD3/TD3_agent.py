@@ -3,9 +3,10 @@ import os
 import torch
 from datetime import datetime
 from .actor import Actor, ActorLSTM, ActorMLP
-from .buffer import Buffer
 from .critic import Critic, CriticLSTM, CriticMLP
+from ..agent_utils import match_actions_dim_with_states
 from ..networks.generic_network import GenericNetwork
+from ..off_policy_buffer import Buffer
 from ...base_object import BaseObject
 from ...device_utils import set_device
 from time import time
@@ -138,7 +139,7 @@ class TD3Agent(BaseObject):
         actions = self.actor.get_noisy_actions(states)
         # the last environment is an "evaluation" environment, so it should strictly
         # use the means of the distribution
-        evaluation_state = states[-1]
+        evaluation_state = states[-1].unsqueeze(0)
         evaluation_action = self.actor.forward(evaluation_state.float()).detach()
         actions[-1, :] = evaluation_action
         return actions
@@ -238,7 +239,10 @@ class TD3Agent(BaseObject):
         )
         clipped_noise = torch.clamp(noise, -self.traning_clip, +self.traning_clip)
         target_actions = torch.clamp(target_actions + clipped_noise, -1, +1)
-        inputs = torch.cat([float_next_states, target_actions], dim=1)
+        target_actions, concat_dim = match_actions_dim_with_states(
+            float_next_states, target_actions
+        )
+        inputs = torch.cat([float_next_states, target_actions], dim=concat_dim)
         target_state_action_values_1 = self.target_critic_1.forward(inputs)
         target_state_action_values_2 = self.target_critic_2.forward(inputs)
         target_state_action_values = torch.minimum(
@@ -334,6 +338,7 @@ class TD3AgentLSTM(TD3Agent):
         device_id: int = 0,
     ):
         hidden_dims = (hidden_dim,)
+        self.sequence_length = env_args["sequence_length"]
         super().__init__(
             env_args=env_args,
             hidden_dims=hidden_dims,
@@ -350,26 +355,28 @@ class TD3AgentLSTM(TD3Agent):
         )
         self.actor = ActorLSTM(
             self.actor_shape,
+            self.sequence_length,
             learning_rate,
             action_std_dev,
             device_id=device_id,
         )
         self.target_actor = ActorLSTM(
             self.actor_shape,
+            self.sequence_length,
             learning_rate,
             action_std_dev,
             device_id=device_id,
         )
         self.critic_1 = CriticLSTM(
-            self.critic_shape, learning_rate, device_id=device_id
+            self.critic_shape, self.sequence_length, learning_rate, device_id=device_id
         )
         self.critic_2 = CriticLSTM(
-            self.critic_shape, learning_rate, device_id=device_id
+            self.critic_shape, self.sequence_length, learning_rate, device_id=device_id
         )
         self.target_critic_1 = CriticLSTM(
-            self.critic_shape, learning_rate, device_id=device_id
+            self.critic_shape, self.sequence_length, learning_rate, device_id=device_id
         )
         self.target_critic_2 = CriticLSTM(
-            self.critic_shape, learning_rate, device_id=device_id
+            self.critic_shape, self.sequence_length, learning_rate, device_id=device_id
         )
         self.initialize_target_parameters()

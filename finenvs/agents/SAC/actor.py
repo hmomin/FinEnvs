@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from .critic import Critic
+from ..agent_utils import match_actions_dim_with_states
 from ..networks.generic_network import GenericNetwork
 from ..networks.lstm import LSTMNetwork
 from ..networks.multilayer_perceptron import MLPNetwork
@@ -68,7 +69,8 @@ class Actor(GenericNetwork):
         actions, log_probs = self.get_actions_and_log_probs(states)
         mean_log_probs = log_probs.mean(dim=1, keepdim=True)
         entropy_term = -self.log_alpha.exp() * mean_log_probs
-        states_actions = torch.cat([states, actions], dim=1)
+        actions, concat_dim = match_actions_dim_with_states(states, actions)
+        states_actions = torch.cat([states, actions], dim=concat_dim)
         state_action_val_1 = critic_1.forward(states_actions)
         state_action_val_2 = critic_2.forward(states_actions)
         min_state_action_val = torch.min(state_action_val_1, state_action_val_2)
