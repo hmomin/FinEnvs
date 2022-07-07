@@ -1,10 +1,10 @@
 import os
 import torch
-from finenvs.agents.TD3.actor import ActorMLP
+from finenvs.agents.PPO.continuous_actor import ContinuousActorLSTM
 from finenvs.environments.time_series_env import TimeSeriesEnv
 from re import findall
 
-relative_trials_dir = "../trials/SPY_TD3_2022-06-20_23-03-21"
+relative_trials_dir = "../../trials/SPY_PPO_2022-07-06_20-22-21"
 
 
 def get_trials_dir(relative_dir: str) -> str:
@@ -15,16 +15,18 @@ def get_trials_dir(relative_dir: str) -> str:
 
 def get_model_number(filename: str) -> int:
     numbers = findall("[0-9]+", filename)
-    model_number = int(numbers[1])
+    if len(numbers) != 1:
+        raise Exception(f"Multiple numbers found in filename ({filename})")
+    model_number = int(numbers[0])
     return model_number
 
 
-def test_MLP_on_evaluation_enviroments(env_name: str):
+def test_LSTM_on_evaluation_enviroments(env_name: str):
     env_keys = ["train", "valid", "test"]
 
-    hidden_dims = (1024, 512, 256, 128)
-    actor_shape = (1561, *hidden_dims, 1)
-    test_actor = ActorMLP(actor_shape)
+    hidden_dim = 1024
+    actor_shape = (5, hidden_dim, 1)
+    test_actor = ContinuousActorLSTM(shape=actor_shape, sequence_length=4)
 
     trials_dir = get_trials_dir(relative_trials_dir)
     model_filenames = os.listdir(trials_dir)
@@ -38,7 +40,7 @@ def test_MLP_on_evaluation_enviroments(env_name: str):
 
         evaluation_metrics: "list[float]" = [model_number]
         for env_key in env_keys:
-            env = TimeSeriesEnv(env_name, env_key, evaluate=True)
+            env = TimeSeriesEnv(env_name, env_key, num_intervals=4, evaluate=True)
             states = env.reset()
             while True:
                 actions = test_actor.forward(states.float()).detach()
@@ -54,4 +56,4 @@ def test_MLP_on_evaluation_enviroments(env_name: str):
 
 
 if __name__ == "__main__":
-    test_MLP_on_evaluation_enviroments("SPY")
+    test_LSTM_on_evaluation_enviroments("SPY")

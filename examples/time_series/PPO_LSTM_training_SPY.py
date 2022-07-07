@@ -1,24 +1,20 @@
 import torch
-from finenvs.agents.PPO.PPO_agent import PPOAgentMLP
+from finenvs.agents.PPO.PPO_agent import PPOAgentLSTM
 from finenvs.environments.time_series_env import TimeSeriesEnv
 
 
-def train_PPO_MLP_on_training_set(env_name: str, seed: int):
+def train_PPO_LSTM_on_training_set(env_name: str, seed: int):
     torch.manual_seed(seed)
-    num_envs = 4096
-    env = TimeSeriesEnv(
-        instrument_name=env_name,
-        dataset_key="train",
-        num_envs=num_envs,
-    )
-    batch_size = num_envs * 32
-    max_samples = 100_000_000_000
+    env = TimeSeriesEnv(instrument_name=env_name, dataset_key="train", num_intervals=4)
     env_args = env.get_env_args()
-    agent = PPOAgentMLP(
+    num_envs = env_args["num_envs"]
+    batch_size = num_envs * 64
+    max_samples = 100_000_000_000
+    agent = PPOAgentLSTM(
         env_args=env_args,
         num_epochs=4,
         num_mini_batches=4,
-        hidden_dims=(1024, 512, 256, 128),
+        hidden_dim=1024,
         model_save_interval=20,
         write_to_csv=True,
     )
@@ -35,4 +31,4 @@ def train_PPO_MLP_on_training_set(env_name: str, seed: int):
 
 
 if __name__ == "__main__":
-    train_PPO_MLP_on_training_set("SPY", 602585557)
+    train_PPO_LSTM_on_training_set("SPY", 602585557)
