@@ -18,7 +18,7 @@ def train_Evo_MLP_on_environment(env_name: str):
     env_args["num_envs"] = num_envs
     env_args["num_eval_envs"] = num_eval_envs
 
-    env = IsaacGymEnv(env_name, num_envs, headless=False)
+    env = IsaacGymEnv(env_name, num_envs, headless=True)
     agent = EvoAgent(
         env_args,
         hidden_dims=(256, 256),

@@ -15,7 +15,6 @@ def train_TD3_MLP_on_environiment(env_name: str):
     desired_eval_return = 6_000
 
     env = IsaacGymEnv(env_name, num_envs, headless=True)
-
     agent = TD3AgentMLP(
         env_args,
         hidden_dims=(256, 256),

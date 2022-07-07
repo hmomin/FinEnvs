@@ -17,7 +17,8 @@ def train_PPO_MLP_on_environment(env_name: str):
         env_args,
         num_epochs=4,
         num_mini_batches=4,
-        hidden_dims=(256, 128, 64),
+        hidden_dims=(256, 256),
+        model_save_interval=-1,
         write_to_csv=False,
     )
     states = env.reset()

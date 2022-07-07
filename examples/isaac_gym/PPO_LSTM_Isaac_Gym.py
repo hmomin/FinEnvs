@@ -9,16 +9,21 @@ from finenvs.environments.isaac_gym_envs.utils.config_utils import (
 def train_PPO_LSTM_on_environment(env_name: str):
     env_args = get_isaac_gym_env_args(env_name)
     num_envs = env_args["num_envs"]
+    sequence_length = env_args["sequence_length"]
     batch_size = num_envs * 16
     max_samples = 100_000_000
 
     env = IsaacGymEnv(env_name, num_envs, headless=True)
-    agent = PPOAgentLSTM(env_args, hidden_dim=1024, write_to_csv=True)
+    agent = PPOAgentLSTM(
+        env_args, hidden_dim=1024, model_save_interval=-1, write_to_csv=False
+    )
     states = env.reset()
+    states = states.unsqueeze(1).repeat(1, sequence_length, 1)
     total_samples = 0
     while total_samples < max_samples:
         (actions, log_probs, values) = agent.step(states)
         (next_states, rewards, dones, _) = env.step(actions)
+        next_states = next_states.unsqueeze(1).repeat(1, sequence_length, 1)
         agent.store(states, actions, rewards, dones, log_probs, values)
         states = next_states
         if agent.get_buffer_size() >= batch_size:
